@@ -4,29 +4,27 @@ import CredentialsProvider from "next-auth/providers/credentials"
 
 export const authOptions = {
   providers: [
-    // Microsoft OAuth
+    // Microsoft Azure AD (single-tenant)
     AzureADProvider({
       clientId: process.env.MICROSOFT_CLIENT_ID,
       clientSecret: process.env.MICROSOFT_CLIENT_SECRET,
-      tenantId: process.env.MICROSOFT_TENANT_ID, // from .env
+      tenantId: process.env.MICROSOFT_TENANT_ID, // use your tenant ID, not "common"
       authorization: {
         params: {
-          scope: "openid email profile offline_access User.Read",
+          scope: "openid profile email offline_access User.Read",
         },
       },
     }),
 
-    // Hardcoded credentials
+    // Credentials (hardcoded test users)
     CredentialsProvider({
       id: "credentials",
       name: "Email and Password",
       credentials: {
         email: { label: "Email", type: "email" },
-        password: { label: "Password", type: "password" }
+        password: { label: "Password", type: "password" },
       },
       async authorize(credentials) {
-        console.log("Received credentials in authorize:", credentials)
-
         if (!credentials?.email || !credentials?.password) {
           throw new Error("Missing email or password")
         }
@@ -41,19 +39,20 @@ export const authOptions = {
         )
 
         if (user) {
-          console.log("User authenticated:", user)
           return { id: user.id, email: user.email, name: user.name }
         }
 
         throw new Error("Invalid email or password")
-      }
-    })
+      },
+    }),
   ],
-  secret: process.env.NEXTAUTH_SECRET, // required for JWT
+
+  secret: process.env.NEXTAUTH_SECRET,
   pages: {
     signIn: "/login",
-    error: "/login", // Will redirect with ?error=...
+    error: "/login", // redirects with ?error=
   },
+
   callbacks: {
     async jwt({ token, user, account }) {
       if (user) {
@@ -66,6 +65,25 @@ export const authOptions = {
       session.user.id = token.id
       session.user.provider = token.provider
       return session
+    },
+  },
+
+  // Debugging
+  debug: true,
+  events: {
+    error(message) {
+      console.error("NextAuth event error:", message)
+    },
+  },
+  logger: {
+    error(code, metadata) {
+      console.error("NextAuth logger error:", code, metadata)
+    },
+    warn(code) {
+      console.warn("NextAuth logger warn:", code)
+    },
+    debug(code, metadata) {
+      console.debug("NextAuth logger debug:", code, metadata)
     },
   },
 }
