@@ -1,7 +1,0 @@
-{
-  "version": 3,
-  "sources": [],
-  "sections": [
-    {"offset": {"line": 3, "column": 0}, "map": {"version":3,"sources":[],"names":[],"mappings":"","debugId":null}},
-    {"offset": {"line": 109, "column": 0}, "map": {"version":3,"sources":["file:///C:/Users/SehanHettiarachchi/OneDrive%20-%20Offshore%20Information%20Technology%20Solutions/Desktop/test/src/app/api/%5B...nextauth%5D/route.js"],"sourcesContent":["import NextAuth from \"next-auth\"\r\nimport MicrosoftProvider from \"next-auth/providers/microsoft\"\r\n\r\nexport const authOptions = {\r\n  providers: [\r\n    MicrosoftProvider({\r\n      clientId: process.env.MICROSOFT_CLIENT_ID,\r\n      clientSecret: process.env.MICROSOFT_CLIENT_SECRET,\r\n      authorization: {\r\n        params: { scope: \"openid email profile offline_access User.Read\" },\r\n      },\r\n    }),\r\n  ],\r\n  pages: {\r\n    signIn: \"/login\",  // page to show login form\r\n    error: \"/login\",   // page to redirect on auth errors instead of /api/auth/error\r\n  },\r\n}\r\n\r\nconst handler = NextAuth(authOptions)\r\nexport { handler as GET, handler as POST }\r\n"],"names":[],"mappings":";;;;;;;;AAAA;;;;;;;;AAGO,MAAM,cAAc;IACzB,WAAW;QACT,kBAAkB;YAChB,UAAU,QAAQ,GAAG,CAAC,mBAAmB;YACzC,cAAc,QAAQ,GAAG,CAAC,uBAAuB;YACjD,eAAe;gBACb,QAAQ;oBAAE,OAAO;gBAAgD;YACnE;QACF;KACD;IACD,OAAO;QACL,QAAQ;QACR,OAAO;IACT;AACF;AAEA,MAAM,UAAU,IAAA,kJAAQ,EAAC","debugId":null}}]
-}
