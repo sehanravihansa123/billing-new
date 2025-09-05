@@ -441,14 +441,478 @@ else {
     module.exports = __turbopack_context__.r("[project]/node_modules/next/dist/compiled/react/cjs/react-jsx-dev-runtime.development.js [app-client] (ecmascript)");
 }
 }),
-"[project]/node_modules/next-auth/core/errors.js [app-client] (ecmascript)", ((__turbopack_context__, module, exports) => {
-"use strict";
+"[project]/node_modules/@babel/runtime/helpers/interopRequireDefault.js [app-client] (ecmascript)", ((__turbopack_context__, module, exports) => {
 
-var _interopRequireDefault = (()=>{
-    const e = new Error("Cannot find module '@babel/runtime/helpers/interopRequireDefault'");
+function _interopRequireDefault(e) {
+    return e && e.__esModule ? e : {
+        "default": e
+    };
+}
+module.exports = _interopRequireDefault, module.exports.__esModule = true, module.exports["default"] = module.exports;
+}),
+"[project]/node_modules/@babel/runtime/helpers/typeof.js [app-client] (ecmascript)", ((__turbopack_context__, module, exports) => {
+
+function _typeof(o) {
+    "@babel/helpers - typeof";
+    return module.exports = _typeof = "function" == typeof Symbol && "symbol" == typeof Symbol.iterator ? function(o) {
+        return typeof o;
+    } : function(o) {
+        return o && "function" == typeof Symbol && o.constructor === Symbol && o !== Symbol.prototype ? "symbol" : typeof o;
+    }, module.exports.__esModule = true, module.exports["default"] = module.exports, _typeof(o);
+}
+module.exports = _typeof, module.exports.__esModule = true, module.exports["default"] = module.exports;
+}),
+"[project]/node_modules/@babel/runtime/helpers/OverloadYield.js [app-client] (ecmascript)", ((__turbopack_context__, module, exports) => {
+
+function _OverloadYield(e, d) {
+    this.v = e, this.k = d;
+}
+module.exports = _OverloadYield, module.exports.__esModule = true, module.exports["default"] = module.exports;
+}),
+"[project]/node_modules/@babel/runtime/helpers/regeneratorDefine.js [app-client] (ecmascript)", ((__turbopack_context__, module, exports) => {
+
+function _regeneratorDefine(e, r, n, t) {
+    var i = Object.defineProperty;
+    try {
+        i({}, "", {});
+    } catch (e) {
+        i = 0;
+    }
+    module.exports = _regeneratorDefine = function regeneratorDefine(e, r, n, t) {
+        function o(r, n) {
+            _regeneratorDefine(e, r, function(e) {
+                return this._invoke(r, n, e);
+            });
+        }
+        r ? i ? i(e, r, {
+            value: n,
+            enumerable: !t,
+            configurable: !t,
+            writable: !t
+        }) : e[r] = n : (o("next", 0), o("throw", 1), o("return", 2));
+    }, module.exports.__esModule = true, module.exports["default"] = module.exports, _regeneratorDefine(e, r, n, t);
+}
+module.exports = _regeneratorDefine, module.exports.__esModule = true, module.exports["default"] = module.exports;
+}),
+"[project]/node_modules/@babel/runtime/helpers/regenerator.js [app-client] (ecmascript)", ((__turbopack_context__, module, exports) => {
+
+var regeneratorDefine = __turbopack_context__.r("[project]/node_modules/@babel/runtime/helpers/regeneratorDefine.js [app-client] (ecmascript)");
+function _regenerator() {
+    /*! regenerator-runtime -- Copyright (c) 2014-present, Facebook, Inc. -- license (MIT): https://github.com/babel/babel/blob/main/packages/babel-helpers/LICENSE */ var e, t, r = "function" == typeof Symbol ? Symbol : {}, n = r.iterator || "@@iterator", o = r.toStringTag || "@@toStringTag";
+    function i(r, n, o, i) {
+        var c = n && n.prototype instanceof Generator ? n : Generator, u = Object.create(c.prototype);
+        return regeneratorDefine(u, "_invoke", function(r, n, o) {
+            var i, c, u, f = 0, p = o || [], y = !1, G = {
+                p: 0,
+                n: 0,
+                v: e,
+                a: d,
+                f: d.bind(e, 4),
+                d: function d(t, r) {
+                    return i = t, c = 0, u = e, G.n = r, a;
+                }
+            };
+            function d(r, n) {
+                for(c = r, u = n, t = 0; !y && f && !o && t < p.length; t++){
+                    var o, i = p[t], d = G.p, l = i[2];
+                    r > 3 ? (o = l === n) && (u = i[(c = i[4]) ? 5 : (c = 3, 3)], i[4] = i[5] = e) : i[0] <= d && ((o = r < 2 && d < i[1]) ? (c = 0, G.v = n, G.n = i[1]) : d < l && (o = r < 3 || i[0] > n || n > l) && (i[4] = r, i[5] = n, G.n = l, c = 0));
+                }
+                if (o || r > 1) return a;
+                throw y = !0, n;
+            }
+            return function(o, p, l) {
+                if (f > 1) throw TypeError("Generator is already running");
+                for(y && 1 === p && d(p, l), c = p, u = l; (t = c < 2 ? e : u) || !y;){
+                    i || (c ? c < 3 ? (c > 1 && (G.n = -1), d(c, u)) : G.n = u : G.v = u);
+                    try {
+                        if (f = 2, i) {
+                            if (c || (o = "next"), t = i[o]) {
+                                if (!(t = t.call(i, u))) throw TypeError("iterator result is not an object");
+                                if (!t.done) return t;
+                                u = t.value, c < 2 && (c = 0);
+                            } else 1 === c && (t = i["return"]) && t.call(i), c < 2 && (u = TypeError("The iterator does not provide a '" + o + "' method"), c = 1);
+                            i = e;
+                        } else if ((t = (y = G.n < 0) ? u : r.call(n, G)) !== a) break;
+                    } catch (t) {
+                        i = e, c = 1, u = t;
+                    } finally{
+                        f = 1;
+                    }
+                }
+                return {
+                    value: t,
+                    done: y
+                };
+            };
+        }(r, o, i), !0), u;
+    }
+    var a = {};
+    function Generator() {}
+    function GeneratorFunction() {}
+    function GeneratorFunctionPrototype() {}
+    t = Object.getPrototypeOf;
+    var c = [][n] ? t(t([][n]())) : (regeneratorDefine(t = {}, n, function() {
+        return this;
+    }), t), u = GeneratorFunctionPrototype.prototype = Generator.prototype = Object.create(c);
+    function f(e) {
+        return Object.setPrototypeOf ? Object.setPrototypeOf(e, GeneratorFunctionPrototype) : (e.__proto__ = GeneratorFunctionPrototype, regeneratorDefine(e, o, "GeneratorFunction")), e.prototype = Object.create(u), e;
+    }
+    return GeneratorFunction.prototype = GeneratorFunctionPrototype, regeneratorDefine(u, "constructor", GeneratorFunctionPrototype), regeneratorDefine(GeneratorFunctionPrototype, "constructor", GeneratorFunction), GeneratorFunction.displayName = "GeneratorFunction", regeneratorDefine(GeneratorFunctionPrototype, o, "GeneratorFunction"), regeneratorDefine(u), regeneratorDefine(u, o, "Generator"), regeneratorDefine(u, n, function() {
+        return this;
+    }), regeneratorDefine(u, "toString", function() {
+        return "[object Generator]";
+    }), (module.exports = _regenerator = function _regenerator() {
+        return {
+            w: i,
+            m: f
+        };
+    }, module.exports.__esModule = true, module.exports["default"] = module.exports)();
+}
+module.exports = _regenerator, module.exports.__esModule = true, module.exports["default"] = module.exports;
+}),
+"[project]/node_modules/@babel/runtime/helpers/regeneratorAsyncIterator.js [app-client] (ecmascript)", ((__turbopack_context__, module, exports) => {
+
+var OverloadYield = __turbopack_context__.r("[project]/node_modules/@babel/runtime/helpers/OverloadYield.js [app-client] (ecmascript)");
+var regeneratorDefine = __turbopack_context__.r("[project]/node_modules/@babel/runtime/helpers/regeneratorDefine.js [app-client] (ecmascript)");
+function AsyncIterator(t, e) {
+    function n(r, o, i, f) {
+        try {
+            var c = t[r](o), u = c.value;
+            return u instanceof OverloadYield ? e.resolve(u.v).then(function(t) {
+                n("next", t, i, f);
+            }, function(t) {
+                n("throw", t, i, f);
+            }) : e.resolve(u).then(function(t) {
+                c.value = t, i(c);
+            }, function(t) {
+                return n("throw", t, i, f);
+            });
+        } catch (t) {
+            f(t);
+        }
+    }
+    var r;
+    this.next || (regeneratorDefine(AsyncIterator.prototype), regeneratorDefine(AsyncIterator.prototype, "function" == typeof Symbol && Symbol.asyncIterator || "@asyncIterator", function() {
+        return this;
+    })), regeneratorDefine(this, "_invoke", function(t, o, i) {
+        function f() {
+            return new e(function(e, r) {
+                n(t, i, e, r);
+            });
+        }
+        return r = r ? r.then(f, f) : f();
+    }, !0);
+}
+module.exports = AsyncIterator, module.exports.__esModule = true, module.exports["default"] = module.exports;
+}),
+"[project]/node_modules/@babel/runtime/helpers/regeneratorAsyncGen.js [app-client] (ecmascript)", ((__turbopack_context__, module, exports) => {
+
+var regenerator = __turbopack_context__.r("[project]/node_modules/@babel/runtime/helpers/regenerator.js [app-client] (ecmascript)");
+var regeneratorAsyncIterator = __turbopack_context__.r("[project]/node_modules/@babel/runtime/helpers/regeneratorAsyncIterator.js [app-client] (ecmascript)");
+function _regeneratorAsyncGen(r, e, t, o, n) {
+    return new regeneratorAsyncIterator(regenerator().w(r, e, t, o), n || Promise);
+}
+module.exports = _regeneratorAsyncGen, module.exports.__esModule = true, module.exports["default"] = module.exports;
+}),
+"[project]/node_modules/@babel/runtime/helpers/regeneratorAsync.js [app-client] (ecmascript)", ((__turbopack_context__, module, exports) => {
+
+var regeneratorAsyncGen = __turbopack_context__.r("[project]/node_modules/@babel/runtime/helpers/regeneratorAsyncGen.js [app-client] (ecmascript)");
+function _regeneratorAsync(n, e, r, t, o) {
+    var a = regeneratorAsyncGen(n, e, r, t, o);
+    return a.next().then(function(n) {
+        return n.done ? n.value : a.next();
+    });
+}
+module.exports = _regeneratorAsync, module.exports.__esModule = true, module.exports["default"] = module.exports;
+}),
+"[project]/node_modules/@babel/runtime/helpers/regeneratorKeys.js [app-client] (ecmascript)", ((__turbopack_context__, module, exports) => {
+
+function _regeneratorKeys(e) {
+    var n = Object(e), r = [];
+    for(var t in n)r.unshift(t);
+    return function e() {
+        for(; r.length;)if ((t = r.pop()) in n) return e.value = t, e.done = !1, e;
+        return e.done = !0, e;
+    };
+}
+module.exports = _regeneratorKeys, module.exports.__esModule = true, module.exports["default"] = module.exports;
+}),
+"[project]/node_modules/@babel/runtime/helpers/regeneratorValues.js [app-client] (ecmascript)", ((__turbopack_context__, module, exports) => {
+
+var _typeof = __turbopack_context__.r("[project]/node_modules/@babel/runtime/helpers/typeof.js [app-client] (ecmascript)")["default"];
+function _regeneratorValues(e) {
+    if (null != e) {
+        var t = e["function" == typeof Symbol && Symbol.iterator || "@@iterator"], r = 0;
+        if (t) return t.call(e);
+        if ("function" == typeof e.next) return e;
+        if (!isNaN(e.length)) return {
+            next: function next() {
+                return e && r >= e.length && (e = void 0), {
+                    value: e && e[r++],
+                    done: !e
+                };
+            }
+        };
+    }
+    throw new TypeError(_typeof(e) + " is not iterable");
+}
+module.exports = _regeneratorValues, module.exports.__esModule = true, module.exports["default"] = module.exports;
+}),
+"[project]/node_modules/@babel/runtime/helpers/regeneratorRuntime.js [app-client] (ecmascript)", ((__turbopack_context__, module, exports) => {
+
+var OverloadYield = __turbopack_context__.r("[project]/node_modules/@babel/runtime/helpers/OverloadYield.js [app-client] (ecmascript)");
+var regenerator = __turbopack_context__.r("[project]/node_modules/@babel/runtime/helpers/regenerator.js [app-client] (ecmascript)");
+var regeneratorAsync = __turbopack_context__.r("[project]/node_modules/@babel/runtime/helpers/regeneratorAsync.js [app-client] (ecmascript)");
+var regeneratorAsyncGen = __turbopack_context__.r("[project]/node_modules/@babel/runtime/helpers/regeneratorAsyncGen.js [app-client] (ecmascript)");
+var regeneratorAsyncIterator = __turbopack_context__.r("[project]/node_modules/@babel/runtime/helpers/regeneratorAsyncIterator.js [app-client] (ecmascript)");
+var regeneratorKeys = __turbopack_context__.r("[project]/node_modules/@babel/runtime/helpers/regeneratorKeys.js [app-client] (ecmascript)");
+var regeneratorValues = __turbopack_context__.r("[project]/node_modules/@babel/runtime/helpers/regeneratorValues.js [app-client] (ecmascript)");
+function _regeneratorRuntime() {
+    "use strict";
+    var r = regenerator(), e = r.m(_regeneratorRuntime), t = (Object.getPrototypeOf ? Object.getPrototypeOf(e) : e.__proto__).constructor;
+    function n(r) {
+        var e = "function" == typeof r && r.constructor;
+        return !!e && (e === t || "GeneratorFunction" === (e.displayName || e.name));
+    }
+    var o = {
+        "throw": 1,
+        "return": 2,
+        "break": 3,
+        "continue": 3
+    };
+    function a(r) {
+        var e, t;
+        return function(n) {
+            e || (e = {
+                stop: function stop() {
+                    return t(n.a, 2);
+                },
+                "catch": function _catch() {
+                    return n.v;
+                },
+                abrupt: function abrupt(r, e) {
+                    return t(n.a, o[r], e);
+                },
+                delegateYield: function delegateYield(r, o, a) {
+                    return e.resultName = o, t(n.d, regeneratorValues(r), a);
+                },
+                finish: function finish(r) {
+                    return t(n.f, r);
+                }
+            }, t = function t(r, _t, o) {
+                n.p = e.prev, n.n = e.next;
+                try {
+                    return r(_t, o);
+                } finally{
+                    e.next = n.n;
+                }
+            }), e.resultName && (e[e.resultName] = n.v, e.resultName = void 0), e.sent = n.v, e.next = n.n;
+            try {
+                return r.call(this, e);
+            } finally{
+                n.p = e.prev, n.n = e.next;
+            }
+        };
+    }
+    return (module.exports = _regeneratorRuntime = function _regeneratorRuntime() {
+        return {
+            wrap: function wrap(e, t, n, o) {
+                return r.w(a(e), t, n, o && o.reverse());
+            },
+            isGeneratorFunction: n,
+            mark: r.m,
+            awrap: function awrap(r, e) {
+                return new OverloadYield(r, e);
+            },
+            AsyncIterator: regeneratorAsyncIterator,
+            async: function async(r, e, t, o, u) {
+                return (n(e) ? regeneratorAsyncGen : regeneratorAsync)(a(r), e, t, o, u);
+            },
+            keys: regeneratorKeys,
+            values: regeneratorValues
+        };
+    }, module.exports.__esModule = true, module.exports["default"] = module.exports)();
+}
+module.exports = _regeneratorRuntime, module.exports.__esModule = true, module.exports["default"] = module.exports;
+}),
+"[project]/node_modules/@babel/runtime/regenerator/index.js [app-client] (ecmascript)", ((__turbopack_context__, module, exports) => {
+
+// TODO(Babel 8): Remove this file.
+var runtime = __turbopack_context__.r("[project]/node_modules/@babel/runtime/helpers/regeneratorRuntime.js [app-client] (ecmascript)")();
+module.exports = runtime;
+// Copied from https://github.com/facebook/regenerator/blob/main/packages/runtime/runtime.js#L736=
+try {
+    regeneratorRuntime = runtime;
+} catch (accidentalStrictMode) {
+    if (typeof globalThis === "object") {
+        globalThis.regeneratorRuntime = runtime;
+    } else {
+        Function("r", "regeneratorRuntime = r")(runtime);
+    }
+}
+}),
+"[project]/node_modules/@babel/runtime/helpers/iterableToArrayLimit.js [app-client] (ecmascript)", ((__turbopack_context__, module, exports) => {
+
+function _iterableToArrayLimit(r, l) {
+    var t = null == r ? null : "undefined" != typeof Symbol && r[Symbol.iterator] || r["@@iterator"];
+    if (null != t) {
+        var e, n, i, u, a = [], f = !0, o = !1;
+        try {
+            if (i = (t = t.call(r)).next, 0 === l) {
+                if (Object(t) !== t) return;
+                f = !1;
+            } else for(; !(f = (e = i.call(t)).done) && (a.push(e.value), a.length !== l); f = !0);
+        } catch (r) {
+            o = !0, n = r;
+        } finally{
+            try {
+                if (!f && null != t["return"] && (u = t["return"](), Object(u) !== u)) return;
+            } finally{
+                if (o) throw n;
+            }
+        }
+        return a;
+    }
+}
+module.exports = _iterableToArrayLimit, module.exports.__esModule = true, module.exports["default"] = module.exports;
+}),
+"[project]/node_modules/@babel/runtime/helpers/unsupportedIterableToArray.js [app-client] (ecmascript)", ((__turbopack_context__, module, exports) => {
+
+var arrayLikeToArray = (()=>{
+    const e = new Error("Cannot find module './arrayLikeToArray.js'");
     e.code = 'MODULE_NOT_FOUND';
     throw e;
 })();
+function _unsupportedIterableToArray(r, a) {
+    if (r) {
+        if ("string" == typeof r) return arrayLikeToArray(r, a);
+        var t = ({}).toString.call(r).slice(8, -1);
+        return "Object" === t && r.constructor && (t = r.constructor.name), "Map" === t || "Set" === t ? Array.from(r) : "Arguments" === t || /^(?:Ui|I)nt(?:8|16|32)(?:Clamped)?Array$/.test(t) ? arrayLikeToArray(r, a) : void 0;
+    }
+}
+module.exports = _unsupportedIterableToArray, module.exports.__esModule = true, module.exports["default"] = module.exports;
+}),
+"[project]/node_modules/@babel/runtime/helpers/nonIterableRest.js [app-client] (ecmascript)", ((__turbopack_context__, module, exports) => {
+
+function _nonIterableRest() {
+    throw new TypeError("Invalid attempt to destructure non-iterable instance.\nIn order to be iterable, non-array objects must have a [Symbol.iterator]() method.");
+}
+module.exports = _nonIterableRest, module.exports.__esModule = true, module.exports["default"] = module.exports;
+}),
+"[project]/node_modules/@babel/runtime/helpers/slicedToArray.js [app-client] (ecmascript)", ((__turbopack_context__, module, exports) => {
+
+var arrayWithHoles = (()=>{
+    const e = new Error("Cannot find module './arrayWithHoles.js'");
+    e.code = 'MODULE_NOT_FOUND';
+    throw e;
+})();
+var iterableToArrayLimit = __turbopack_context__.r("[project]/node_modules/@babel/runtime/helpers/iterableToArrayLimit.js [app-client] (ecmascript)");
+var unsupportedIterableToArray = __turbopack_context__.r("[project]/node_modules/@babel/runtime/helpers/unsupportedIterableToArray.js [app-client] (ecmascript)");
+var nonIterableRest = __turbopack_context__.r("[project]/node_modules/@babel/runtime/helpers/nonIterableRest.js [app-client] (ecmascript)");
+function _slicedToArray(r, e) {
+    return arrayWithHoles(r) || iterableToArrayLimit(r, e) || unsupportedIterableToArray(r, e) || nonIterableRest();
+}
+module.exports = _slicedToArray, module.exports.__esModule = true, module.exports["default"] = module.exports;
+}),
+"[project]/node_modules/@babel/runtime/helpers/possibleConstructorReturn.js [app-client] (ecmascript)", ((__turbopack_context__, module, exports) => {
+
+var _typeof = __turbopack_context__.r("[project]/node_modules/@babel/runtime/helpers/typeof.js [app-client] (ecmascript)")["default"];
+var assertThisInitialized = (()=>{
+    const e = new Error("Cannot find module './assertThisInitialized.js'");
+    e.code = 'MODULE_NOT_FOUND';
+    throw e;
+})();
+function _possibleConstructorReturn(t, e) {
+    if (e && ("object" == _typeof(e) || "function" == typeof e)) return e;
+    if (void 0 !== e) throw new TypeError("Derived constructors may only return object or undefined");
+    return assertThisInitialized(t);
+}
+module.exports = _possibleConstructorReturn, module.exports.__esModule = true, module.exports["default"] = module.exports;
+}),
+"[project]/node_modules/@babel/runtime/helpers/getPrototypeOf.js [app-client] (ecmascript)", ((__turbopack_context__, module, exports) => {
+
+function _getPrototypeOf(t) {
+    return module.exports = _getPrototypeOf = Object.setPrototypeOf ? Object.getPrototypeOf.bind() : function(t) {
+        return t.__proto__ || Object.getPrototypeOf(t);
+    }, module.exports.__esModule = true, module.exports["default"] = module.exports, _getPrototypeOf(t);
+}
+module.exports = _getPrototypeOf, module.exports.__esModule = true, module.exports["default"] = module.exports;
+}),
+"[project]/node_modules/@babel/runtime/helpers/setPrototypeOf.js [app-client] (ecmascript)", ((__turbopack_context__, module, exports) => {
+
+function _setPrototypeOf(t, e) {
+    return module.exports = _setPrototypeOf = Object.setPrototypeOf ? Object.setPrototypeOf.bind() : function(t, e) {
+        return t.__proto__ = e, t;
+    }, module.exports.__esModule = true, module.exports["default"] = module.exports, _setPrototypeOf(t, e);
+}
+module.exports = _setPrototypeOf, module.exports.__esModule = true, module.exports["default"] = module.exports;
+}),
+"[project]/node_modules/@babel/runtime/helpers/inherits.js [app-client] (ecmascript)", ((__turbopack_context__, module, exports) => {
+
+var setPrototypeOf = __turbopack_context__.r("[project]/node_modules/@babel/runtime/helpers/setPrototypeOf.js [app-client] (ecmascript)");
+function _inherits(t, e) {
+    if ("function" != typeof e && null !== e) throw new TypeError("Super expression must either be null or a function");
+    t.prototype = Object.create(e && e.prototype, {
+        constructor: {
+            value: t,
+            writable: !0,
+            configurable: !0
+        }
+    }), Object.defineProperty(t, "prototype", {
+        writable: !1
+    }), e && setPrototypeOf(t, e);
+}
+module.exports = _inherits, module.exports.__esModule = true, module.exports["default"] = module.exports;
+}),
+"[project]/node_modules/@babel/runtime/helpers/isNativeFunction.js [app-client] (ecmascript)", ((__turbopack_context__, module, exports) => {
+
+function _isNativeFunction(t) {
+    try {
+        return -1 !== Function.toString.call(t).indexOf("[native code]");
+    } catch (n) {
+        return "function" == typeof t;
+    }
+}
+module.exports = _isNativeFunction, module.exports.__esModule = true, module.exports["default"] = module.exports;
+}),
+"[project]/node_modules/@babel/runtime/helpers/wrapNativeSuper.js [app-client] (ecmascript)", ((__turbopack_context__, module, exports) => {
+
+var getPrototypeOf = __turbopack_context__.r("[project]/node_modules/@babel/runtime/helpers/getPrototypeOf.js [app-client] (ecmascript)");
+var setPrototypeOf = __turbopack_context__.r("[project]/node_modules/@babel/runtime/helpers/setPrototypeOf.js [app-client] (ecmascript)");
+var isNativeFunction = __turbopack_context__.r("[project]/node_modules/@babel/runtime/helpers/isNativeFunction.js [app-client] (ecmascript)");
+var construct = (()=>{
+    const e = new Error("Cannot find module './construct.js'");
+    e.code = 'MODULE_NOT_FOUND';
+    throw e;
+})();
+function _wrapNativeSuper(t) {
+    var r = "function" == typeof Map ? new Map() : void 0;
+    return module.exports = _wrapNativeSuper = function _wrapNativeSuper(t) {
+        if (null === t || !isNativeFunction(t)) return t;
+        if ("function" != typeof t) throw new TypeError("Super expression must either be null or a function");
+        if (void 0 !== r) {
+            if (r.has(t)) return r.get(t);
+            r.set(t, Wrapper);
+        }
+        function Wrapper() {
+            return construct(t, arguments, getPrototypeOf(this).constructor);
+        }
+        return Wrapper.prototype = Object.create(t.prototype, {
+            constructor: {
+                value: Wrapper,
+                enumerable: !1,
+                writable: !0,
+                configurable: !0
+            }
+        }), setPrototypeOf(Wrapper, t);
+    }, module.exports.__esModule = true, module.exports["default"] = module.exports, _wrapNativeSuper(t);
+}
+module.exports = _wrapNativeSuper, module.exports.__esModule = true, module.exports["default"] = module.exports;
+}),
+"[project]/node_modules/next-auth/core/errors.js [app-client] (ecmascript)", ((__turbopack_context__, module, exports) => {
+"use strict";
+
+var _interopRequireDefault = __turbopack_context__.r("[project]/node_modules/@babel/runtime/helpers/interopRequireDefault.js [app-client] (ecmascript)");
 Object.defineProperty(exports, "__esModule", {
     value: true
 });
@@ -457,11 +921,7 @@ exports.adapterErrorHandler = adapterErrorHandler;
 exports.capitalize = capitalize;
 exports.eventsErrorHandler = eventsErrorHandler;
 exports.upperSnake = upperSnake;
-var _regenerator = _interopRequireDefault((()=>{
-    const e = new Error("Cannot find module '@babel/runtime/regenerator'");
-    e.code = 'MODULE_NOT_FOUND';
-    throw e;
-})());
+var _regenerator = _interopRequireDefault(__turbopack_context__.r("[project]/node_modules/@babel/runtime/regenerator/index.js [app-client] (ecmascript)"));
 var _asyncToGenerator2 = _interopRequireDefault((()=>{
     const e = new Error("Cannot find module '@babel/runtime/helpers/asyncToGenerator'");
     e.code = 'MODULE_NOT_FOUND';
@@ -482,26 +942,10 @@ var _createClass2 = _interopRequireDefault((()=>{
     e.code = 'MODULE_NOT_FOUND';
     throw e;
 })());
-var _possibleConstructorReturn2 = _interopRequireDefault((()=>{
-    const e = new Error("Cannot find module '@babel/runtime/helpers/possibleConstructorReturn'");
-    e.code = 'MODULE_NOT_FOUND';
-    throw e;
-})());
-var _getPrototypeOf2 = _interopRequireDefault((()=>{
-    const e = new Error("Cannot find module '@babel/runtime/helpers/getPrototypeOf'");
-    e.code = 'MODULE_NOT_FOUND';
-    throw e;
-})());
-var _inherits2 = _interopRequireDefault((()=>{
-    const e = new Error("Cannot find module '@babel/runtime/helpers/inherits'");
-    e.code = 'MODULE_NOT_FOUND';
-    throw e;
-})());
-var _wrapNativeSuper2 = _interopRequireDefault((()=>{
-    const e = new Error("Cannot find module '@babel/runtime/helpers/wrapNativeSuper'");
-    e.code = 'MODULE_NOT_FOUND';
-    throw e;
-})());
+var _possibleConstructorReturn2 = _interopRequireDefault(__turbopack_context__.r("[project]/node_modules/@babel/runtime/helpers/possibleConstructorReturn.js [app-client] (ecmascript)"));
+var _getPrototypeOf2 = _interopRequireDefault(__turbopack_context__.r("[project]/node_modules/@babel/runtime/helpers/getPrototypeOf.js [app-client] (ecmascript)"));
+var _inherits2 = _interopRequireDefault(__turbopack_context__.r("[project]/node_modules/@babel/runtime/helpers/inherits.js [app-client] (ecmascript)"));
+var _wrapNativeSuper2 = _interopRequireDefault(__turbopack_context__.r("[project]/node_modules/@babel/runtime/helpers/wrapNativeSuper.js [app-client] (ecmascript)"));
 function _callSuper(t, o, e) {
     return o = (0, _getPrototypeOf2.default)(o), (0, _possibleConstructorReturn2.default)(t, _isNativeReflectConstruct() ? Reflect.construct(o, e || [], (0, _getPrototypeOf2.default)(t).constructor) : o.apply(t, e));
 }
@@ -757,22 +1201,14 @@ function adapterErrorHandler(adapter, logger) {
 "[project]/node_modules/next-auth/utils/logger.js [app-client] (ecmascript)", ((__turbopack_context__, module, exports) => {
 "use strict";
 
-var _interopRequireDefault = (()=>{
-    const e = new Error("Cannot find module '@babel/runtime/helpers/interopRequireDefault'");
-    e.code = 'MODULE_NOT_FOUND';
-    throw e;
-})();
+var _interopRequireDefault = __turbopack_context__.r("[project]/node_modules/@babel/runtime/helpers/interopRequireDefault.js [app-client] (ecmascript)");
 Object.defineProperty(exports, "__esModule", {
     value: true
 });
 exports.default = void 0;
 exports.proxyLogger = proxyLogger;
 exports.setLogger = setLogger;
-var _regenerator = _interopRequireDefault((()=>{
-    const e = new Error("Cannot find module '@babel/runtime/regenerator'");
-    e.code = 'MODULE_NOT_FOUND';
-    throw e;
-})());
+var _regenerator = _interopRequireDefault(__turbopack_context__.r("[project]/node_modules/@babel/runtime/regenerator/index.js [app-client] (ecmascript)"));
 var _defineProperty2 = _interopRequireDefault((()=>{
     const e = new Error("Cannot find module '@babel/runtime/helpers/defineProperty'");
     e.code = 'MODULE_NOT_FOUND';
@@ -932,11 +1368,7 @@ function parseUrl(url) {
 "[project]/node_modules/next-auth/client/_utils.js [app-client] (ecmascript)", ((__turbopack_context__, module, exports) => {
 "use strict";
 
-var _interopRequireDefault = (()=>{
-    const e = new Error("Cannot find module '@babel/runtime/helpers/interopRequireDefault'");
-    e.code = 'MODULE_NOT_FOUND';
-    throw e;
-})();
+var _interopRequireDefault = __turbopack_context__.r("[project]/node_modules/@babel/runtime/helpers/interopRequireDefault.js [app-client] (ecmascript)");
 Object.defineProperty(exports, "__esModule", {
     value: true
 });
@@ -944,11 +1376,7 @@ exports.BroadcastChannel = BroadcastChannel;
 exports.apiBaseUrl = apiBaseUrl;
 exports.fetchData = fetchData;
 exports.now = now;
-var _regenerator = _interopRequireDefault((()=>{
-    const e = new Error("Cannot find module '@babel/runtime/regenerator'");
-    e.code = 'MODULE_NOT_FOUND';
-    throw e;
-})());
+var _regenerator = _interopRequireDefault(__turbopack_context__.r("[project]/node_modules/@babel/runtime/regenerator/index.js [app-client] (ecmascript)"));
 var _defineProperty2 = _interopRequireDefault((()=>{
     const e = new Error("Cannot find module '@babel/runtime/helpers/defineProperty'");
     e.code = 'MODULE_NOT_FOUND';
@@ -1087,16 +1515,8 @@ Object.defineProperty(exports, "__esModule", {
 
 var __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$build$2f$polyfills$2f$process$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__ = /*#__PURE__*/ __turbopack_context__.i("[project]/node_modules/next/dist/build/polyfills/process.js [app-client] (ecmascript)");
 "use strict";
-var _interopRequireDefault = (()=>{
-    const e = new Error("Cannot find module '@babel/runtime/helpers/interopRequireDefault'");
-    e.code = 'MODULE_NOT_FOUND';
-    throw e;
-})();
-var _typeof = (()=>{
-    const e = new Error("Cannot find module '@babel/runtime/helpers/typeof'");
-    e.code = 'MODULE_NOT_FOUND';
-    throw e;
-})();
+var _interopRequireDefault = __turbopack_context__.r("[project]/node_modules/@babel/runtime/helpers/interopRequireDefault.js [app-client] (ecmascript)");
+var _typeof = __turbopack_context__.r("[project]/node_modules/@babel/runtime/helpers/typeof.js [app-client] (ecmascript)");
 Object.defineProperty(exports, "__esModule", {
     value: true
 });
@@ -1118,11 +1538,7 @@ exports.getSession = getSession;
 exports.signIn = signIn;
 exports.signOut = signOut;
 exports.useSession = useSession;
-var _regenerator = _interopRequireDefault((()=>{
-    const e = new Error("Cannot find module '@babel/runtime/regenerator'");
-    e.code = 'MODULE_NOT_FOUND';
-    throw e;
-})());
+var _regenerator = _interopRequireDefault(__turbopack_context__.r("[project]/node_modules/@babel/runtime/regenerator/index.js [app-client] (ecmascript)"));
 var _defineProperty2 = _interopRequireDefault((()=>{
     const e = new Error("Cannot find module '@babel/runtime/helpers/defineProperty'");
     e.code = 'MODULE_NOT_FOUND';
@@ -1133,11 +1549,7 @@ var _asyncToGenerator2 = _interopRequireDefault((()=>{
     e.code = 'MODULE_NOT_FOUND';
     throw e;
 })());
-var _slicedToArray2 = _interopRequireDefault((()=>{
-    const e = new Error("Cannot find module '@babel/runtime/helpers/slicedToArray'");
-    e.code = 'MODULE_NOT_FOUND';
-    throw e;
-})());
+var _slicedToArray2 = _interopRequireDefault(__turbopack_context__.r("[project]/node_modules/@babel/runtime/helpers/slicedToArray.js [app-client] (ecmascript)"));
 var React = _interopRequireWildcard(__turbopack_context__.r("[project]/node_modules/next/dist/compiled/react/index.js [app-client] (ecmascript)"));
 var _logger2 = _interopRequireWildcard(__turbopack_context__.r("[project]/node_modules/next-auth/utils/logger.js [app-client] (ecmascript)"));
 var _parseUrl = _interopRequireDefault(__turbopack_context__.r("[project]/node_modules/next-auth/utils/parse-url.js [app-client] (ecmascript)"));
@@ -1734,4 +2146,4 @@ module.exports = __turbopack_context__.r("[project]/node_modules/next/dist/clien
 }),
 ]);
 
-//# sourceMappingURL=_1b9a0648._.js.map
+//# sourceMappingURL=_963cfa22._.js.map
