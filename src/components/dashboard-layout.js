@@ -1,22 +1,38 @@
 "use client"
 
 import { useState } from "react"
-import { LayoutDashboard, FileText, UserPlus, UserMinus, Settings, LogOut, Menu, X } from "lucide-react"
+import { LayoutDashboard, FileText, UserPlus, UserMinus, Settings, LogOut, Menu, X, ArrowLeft, BarChart3, Users, PlayCircle } from "lucide-react"
 
 export default function DashboardLayout({ children }) {
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [showBillingSubmenu, setShowBillingSubmenu] = useState(false)
 
   const navigation = [
     { name: "Overview", href: "/home", icon: LayoutDashboard, current: true },
-    { name: "Billing Reconciliation", href: "/billing", icon: FileText, current: false },
+    { name: "Billing Reconciliation", href: "/billing", icon: FileText, current: false, hasSubmenu: true },
     { name: "Onboarding", href: "/onboarding", icon: UserPlus, current: false },
     { name: "Offboarding", href: "/offboarding", icon: UserMinus, current: false },
+  ]
+
+  const billingSubmenu = [
+    { name: "Dashboard", href: "/billing/dashboard", icon: BarChart3, current: false },
+    { name: "Customer Billing Data", href: "/billing/customer-data", icon: Users, current: false },
+    { name: "Run Reconciliation Form", href: "/billing/reconciliation", icon: PlayCircle, current: false },
   ]
 
   const bottomNavigation = [
     { name: "Settings", href: "/settings", icon: Settings },
     { name: "Log out", href: "/logout", icon: LogOut },
   ]
+
+  const handleBillingClick = (e) => {
+    e.preventDefault()
+    setShowBillingSubmenu(true)
+  }
+
+  const handleBackClick = () => {
+    setShowBillingSubmenu(false)
+  }
 
   return (
     <div className="flex h-screen bg-gray-50">
@@ -45,36 +61,65 @@ export default function DashboardLayout({ children }) {
             </button>
           </div>
 
-          {/* User profile */}
-          <div className="flex items-center p-4 border-b border-gray-200">
-            <div className="h-10 w-10 bg-blue-500 rounded-full flex items-center justify-center text-white font-bold">
-              OI
-            </div>
-            <div className="ml-3">
-              <p className="text-sm font-medium text-gray-900">offshoreit</p>
-              <p className="text-xs text-gray-500">offshoreit@email.abc</p>
-            </div>
-          </div>
-
           {/* Navigation */}
           <nav className="flex-1 px-2 py-4 space-y-1">
-            {navigation.map((item) => {
-              const Icon = item.icon
-              return (
-                <a
-                  key={item.name}
-                  href={item.href}
-                  className={`group flex items-center px-2 py-2 text-sm font-medium rounded-md ${
-                    item.current
-                      ? "bg-gray-100 text-gray-900"
-                      : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"
-                  }`}
+            {/* Show billing submenu */}
+            {showBillingSubmenu ? (
+              <>
+                {/* Back button */}
+                <button
+                  onClick={handleBackClick}
+                  className="group flex items-center w-full px-2 py-2 text-sm font-medium text-gray-600 rounded-md hover:bg-gray-50 hover:text-gray-900 mb-2"
                 >
-                  <Icon className="mr-3 h-5 w-5 flex-shrink-0" />
-                  {item.name}
-                </a>
-              )
-            })}
+                  <ArrowLeft className="mr-3 h-5 w-5 flex-shrink-0" />
+                  Back to Main Menu
+                </button>
+                
+                {/* Submenu header */}
+                <div className="px-2 py-1 text-xs font-semibold text-gray-500 uppercase tracking-wider border-b border-gray-200 mb-2">
+                  Billing Reconciliation
+                </div>
+
+                {/* Billing submenu items */}
+                {billingSubmenu.map((item) => {
+                  const Icon = item.icon
+                  return (
+                    <a
+                      key={item.name}
+                      href={item.href}
+                      className={`group flex items-center px-2 py-2 text-sm font-medium rounded-md ${
+                        item.current
+                          ? "bg-blue-100 text-blue-900 border-l-4 border-blue-500"
+                          : "text-gray-600 hover:bg-gray-50 hover:text-gray-900 ml-1"
+                      }`}
+                    >
+                      <Icon className="mr-3 h-5 w-5 flex-shrink-0" />
+                      {item.name}
+                    </a>
+                  )
+                })}
+              </>
+            ) : (
+              /* Main navigation */
+              navigation.map((item) => {
+                const Icon = item.icon
+                return (
+                  <a
+                    key={item.name}
+                    href={item.href}
+                    onClick={item.hasSubmenu ? handleBillingClick : undefined}
+                    className={`group flex items-center px-2 py-2 text-sm font-medium rounded-md ${
+                      item.current
+                        ? "bg-gray-100 text-gray-900"
+                        : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"
+                    }`}
+                  >
+                    <Icon className="mr-3 h-5 w-5 flex-shrink-0" />
+                    {item.name}
+                  </a>
+                )
+              })
+            )}
           </nav>
 
           {/* Bottom navigation */}
@@ -92,6 +137,26 @@ export default function DashboardLayout({ children }) {
                 </a>
               )
             })}
+          </div>
+
+          {/* User profile moved to bottom */}
+          <div className="flex items-center p-4 border-t border-gray-200 bg-gray-50">
+            <img 
+              src="/offshoreit%20logo.png" 
+              alt="Offshore IT Logo" 
+              className="h-10 w-10 rounded-full object-contain bg-white p-1"
+              onError={(e) => {
+                e.target.style.display = 'none'
+                e.target.nextSibling.style.display = 'flex'
+              }}
+            />
+            <div className="h-10 w-10 bg-blue-500 rounded-full flex items-center justify-center text-white font-bold" style={{display: 'none'}}>
+              OI
+            </div>
+            <div className="ml-3">
+              <p className="text-sm font-medium text-gray-900">offshoreit</p>
+              <p className="text-xs text-gray-500">offshoreit@email.abc</p>
+            </div>
           </div>
         </div>
       </div>
