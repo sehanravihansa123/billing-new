@@ -3,286 +3,167 @@
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import DashboardLayout from "@/components/dashboard-layout.js"
-import { ArrowLeft, CheckCircle, ChevronRight, FileText, Loader, Search, Check, Settings } from "lucide-react"
+import {
+  ArrowLeft,
+  Download,
+  CheckCircle,
+  ChevronRight,
+  FileText,
+  Loader,
+  Search,
+  Check,
+  Building,
+  Filter,
+  AlertTriangle,
+} from "lucide-react"
 
-function AutotaskContractServicesPage() {
+function AutotaskContractMappingPage() {
   const router = useRouter()
-  const [contracts, setContracts] = useState([])
-  const [services, setServices] = useState([])
-  const [organizations, setOrganizations] = useState([])
+  const [csvData, setCsvData] = useState(null)
+  const [billingConfig, setBillingConfig] = useState(null)
   const [organizationMappings, setOrganizationMappings] = useState({})
-  const [autotaskCompanies, setAutotaskCompanies] = useState([])
+  const [contracts, setContracts] = useState([])
+  const [organizations, setOrganizations] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+  const [jsonOutput, setJsonOutput] = useState("")
+  const [isProcessingComplete, setIsProcessingComplete] = useState(false)
+  const [autotaskCompanies, setAutotaskCompanies] = useState([]) // New state for Autotask companies
 
   // UI State
-  const [selectedContract, setSelectedContract] = useState(null)
+  const [selectedOrganization, setSelectedOrganization] = useState(null)
   const [searchTerm, setSearchTerm] = useState("")
-  const [filteredServices, setFilteredServices] = useState([])
-  const [availableContracts, setAvailableContracts] = useState([])
-
-  // Function to fetch services for a specific contract using the advanced endpoint
-  const fetchServicesForContract = async (contractId) => {
-    try {
-      console.log(`=== FETCHING SERVICES FOR CONTRACT ${contractId} ===`)
-      
-      // Try different formats to match your n8n workflow
-      const postUrl = "https://n8n-oitlabs.eastus.cloudapp.azure.com/webhook/autotaskservicesadvancedlist"
-      
-      // Format 1: Simple object with the key your n8n expects
-      const requestBody = {
-        "autotask contract id": contractId
-      }
-      
-      console.log("Trying POST request to:", postUrl)
-      console.log("Request body:", JSON.stringify(requestBody, null, 2))
-      
-      const response = await fetch(postUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(requestBody)
-      })
-      
-      console.log("Response status:", response.status)
-      
-      if (response.ok) {
-        const text = await response.text()
-        console.log("Response text:", text)
-        
-        if (!text || text.trim() === '') {
-          console.log("Empty response from API")
-          
-          // Try alternative format - sometimes n8n expects different structure
-          console.log("Trying alternative request format...")
-          
-          const altResponse = await fetch(postUrl, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify(contractId) // Send just the contract ID as JSON
-          })
-          
-          if (altResponse.ok) {
-            const altText = await altResponse.text()
-            console.log("Alternative response text:", altText)
-            
-            if (altText && altText.trim() !== '') {
-              try {
-                const altData = JSON.parse(altText)
-                const altServices = Array.isArray(altData) ? altData : altData.services || []
-                console.log(`Alternative format found ${altServices.length} services`)
-                
-                const filtered = searchTerm.trim() === ""
-                  ? altServices
-                  : altServices.filter(
-                      (service) =>
-                        (service.invoiceDescription &&
-                          service.invoiceDescription.toLowerCase().includes(searchTerm.toLowerCase())) ||
-                        (service.internalDescription &&
-                          service.internalDescription.toLowerCase().includes(searchTerm.toLowerCase())),
-                    )
-                
-                setFilteredServices(filtered)
-                return
-              } catch (e) {
-                console.log("Alternative format also failed")
-              }
-            }
-          }
-          
-          // If both fail, use fallback
-          console.log("Both API attempts failed, falling back to existing services")
-          const fallbackServices = getServicesForContract(contractId)
-          setFilteredServices(fallbackServices)
-          return
-        }
-        
-        try {
-          const data = JSON.parse(text)
-          const contractServices = Array.isArray(data) ? data : data.services || []
-          
-          console.log(`Found ${contractServices.length} services for contract ${contractId}`)
-          console.log("Contract services:", contractServices)
-          
-          const filtered = searchTerm.trim() === ""
-            ? contractServices
-            : contractServices.filter(
-                (service) =>
-                  (service.invoiceDescription &&
-                    service.invoiceDescription.toLowerCase().includes(searchTerm.toLowerCase())) ||
-                  (service.internalDescription &&
-                    service.internalDescription.toLowerCase().includes(searchTerm.toLowerCase())),
-              )
-
-          console.log("Final filtered services after search:", filtered.length)
-          setFilteredServices(filtered)
-          return
-        } catch (jsonError) {
-          console.log("JSON parse error:", jsonError.message)
-        }
-      } else {
-        console.log("Response not OK, status:", response.status)
-      }
-      
-      // If everything fails, fall back to existing services
-      console.log("All API attempts failed, falling back to existing services")
-      const fallbackServices = getServicesForContract(contractId)
-      setFilteredServices(fallbackServices)
-      
-    } catch (err) {
-      console.error(`Error fetching services for contract ${contractId}:`, err)
-      
-      // Fallback to existing services
-      console.log("Using fallback: filtering existing services")
-      const fallbackServices = getServicesForContract(contractId)
-      setFilteredServices(fallbackServices)
-    }
-  }
-
-  // Function to get services for a specific contract from existing data (fallback only)
-  const getServicesForContract = (contractId) => {
-    const contractServices = services.filter(service => String(service.contractID) === String(contractId))
-    console.log(`Found ${contractServices.length} services for contract ${contractId} in existing data`)
-    return contractServices
-  }
+  const [filteredContracts, setFilteredContracts] = useState([])
+  const [showMappedOnly, setShowMappedOnly] = useState(false)
 
   useEffect(() => {
-    // Retrieve data from sessionStorage including the final contract configuration
-    const storedOrgMappings = sessionStorage.getItem("organizationMappings")
+    // Retrieve data from sessionStorage
     const storedCsvData = sessionStorage.getItem("vendorCsvData")
     const storedBillingConfig = sessionStorage.getItem("billingConfiguration")
-    const storedContractConfig = sessionStorage.getItem("finalContractConfiguration")
+    const storedOrgMappings = sessionStorage.getItem("organizationMappings")
 
-    if (!storedOrgMappings || !storedCsvData || !storedBillingConfig) {
+    console.log("=== COMPONENT LOADING DEBUG ===")
+    console.log("CSV Data in sessionStorage:", storedCsvData ? "Found" : "Missing")
+    console.log("Billing Config in sessionStorage:", storedBillingConfig ? "Found" : "Missing")
+    console.log("Organization Mappings in sessionStorage:", storedOrgMappings ? "Found" : "Missing")
+    console.log("Raw organization mappings:", storedOrgMappings)
+
+    if (!storedCsvData || !storedBillingConfig || !storedOrgMappings) {
+      console.log("Missing required data, redirecting to onboarding")
       router.push("/billing/vendor-settings/onboarding")
       return
     }
 
-    const orgMappingsParsed = JSON.parse(storedOrgMappings)
     const csvDataParsed = JSON.parse(storedCsvData)
     const billingConfigParsed = JSON.parse(storedBillingConfig)
+    const orgMappingsParsed = JSON.parse(storedOrgMappings)
 
+    console.log("Parsed organization mappings:", orgMappingsParsed)
+    console.log("Organization mappings keys:", Object.keys(orgMappingsParsed))
+
+    setCsvData(csvDataParsed)
+    setBillingConfig(billingConfigParsed)
     setOrganizationMappings(orgMappingsParsed)
 
-    // Extract organizations from CSV
+    // Extract unique organizations from CSV
     extractOrganizations(csvDataParsed, billingConfigParsed)
 
-    // Always fetch general services
-    fetchServices()
+    // Fetch contracts
+    fetchContracts()
 
-    // If we have the final contract configuration, use it to populate available contracts
-    if (storedContractConfig) {
-      const contractConfig = JSON.parse(storedContractConfig)
-      console.log("=== USING ORGANIZED CONTRACT DATA ===")
-      console.log("Contract configuration:", contractConfig)
-      
-      // Extract all contracts from the organized data
-      const organizedContracts = []
-      Object.entries(contractConfig.contractsByOrganization || {}).forEach(([org, orgData]) => {
-        if (orgData.contracts) {
-          orgData.contracts.forEach(contract => {
-            console.log(`Adding contract from ${org}:`, contract)
-            organizedContracts.push({
-              ...contract,
-              organizationName: org,
-              autotaskCompany: orgData.autotaskCompany
-            })
-          })
-        }
-      })
-      
-      console.log("All organized contracts:", organizedContracts)
-      setAvailableContracts(organizedContracts)
-      setContracts(organizedContracts)
-    } else {
-      // Fallback to original method if no organized data available
-      fetchContracts()
-      fetchAutotaskCompanies()
-    }
+    // Fetch Autotask companies
+    fetchAutotaskCompanies()
+
+    console.log("=== END COMPONENT LOADING DEBUG ===")
   }, [router])
 
   useEffect(() => {
-    // Filter services based on selected contract
-    if (!selectedContract) {
-      setFilteredServices([])
+    // Filter contracts based on selected organization and search term
+    if (!selectedOrganization) {
+      setFilteredContracts([])
       return
     }
 
-    // Make sure services data is loaded
-    if (!services || services.length === 0) {
-      console.log("Services data not loaded yet, waiting...")
+    const autotaskCompany = organizationMappings[selectedOrganization]
+
+    // DEBUG: Log the values
+    console.log("=== CONTRACT FILTERING DEBUG ===")
+    console.log("Selected CSV organization:", selectedOrganization)
+    console.log("Mapped to Autotask company:", autotaskCompany)
+    console.log("Organization mappings object:", organizationMappings)
+    console.log("Total contracts available:", contracts.length)
+
+    if (!autotaskCompany || autotaskCompany === "No Match Found") {
+      console.log("No valid Autotask company mapping found")
+      setFilteredContracts([])
       return
     }
 
-    console.log("=== FILTERING SERVICES FOR SELECTED CONTRACT ===")
-    console.log("Selected contract:", selectedContract)
-    console.log("Selected contract ID:", selectedContract.id)
-    console.log("Total services available:", services.length)
-    
-    // DEBUG: Check the structure of the first few services
-    console.log("=== SERVICE STRUCTURE DEBUG ===")
-    services.slice(0, 3).forEach((service, index) => {
-      console.log(`Service ${index + 1} structure:`, service)
-      console.log(`Service ${index + 1} keys:`, Object.keys(service))
-    })
-    console.log("=== END SERVICE STRUCTURE DEBUG ===")
-    
-    // Get services for this specific contract from existing data
-    const contractServices = services.filter(service => {
-      // Try different possible field names for contract ID
-      const possibleContractIds = [
-        service.contractID,
-        service.contractId, 
-        service.contract_id,
-        service.ContractID,
-        service.Contract_ID,
-        service.contract,
-        service.Contract
-      ]
-      
-      console.log(`Service ${service.id} possible contract IDs:`, possibleContractIds)
-      
-      const selectedContractId = String(selectedContract.id)
-      
-      // Check each possible field
-      for (let i = 0; i < possibleContractIds.length; i++) {
-        const contractIdValue = possibleContractIds[i]
-        if (contractIdValue !== undefined && contractIdValue !== null) {
-          const serviceContractId = String(contractIdValue)
-          console.log(`Checking service ${service.id}: ${Object.keys(service)[i]} = "${serviceContractId}" vs selected "${selectedContractId}"`)
-          
-          const match = serviceContractId === selectedContractId
-          if (match) {
-            console.log("✅ MATCH FOUND!")
-            return true
-          }
-        }
-      }
-      
-      return false
-    })
-    
-    console.log(`Found ${contractServices.length} services for contract ${selectedContract.id}`)
-    console.log("Contract services:", contractServices)
-    
-    // Apply search filter if there's a search term
-    const filtered = searchTerm.trim() === ""
-      ? contractServices
-      : contractServices.filter(
-          (service) =>
-            (service.invoiceDescription &&
-              service.invoiceDescription.toLowerCase().includes(searchTerm.toLowerCase())) ||
-            (service.internalDescription &&
-              service.internalDescription.toLowerCase().includes(searchTerm.toLowerCase())),
-        )
+    // Since the organizationMappings contains company names, not IDs, we need to find contracts
+    // that belong to companies with matching names
+    const autotaskCompanyName = autotaskCompany.replace(/\s*\(ID:\s*\d+\)\s*$/, "").trim()
 
-    console.log("Final filtered services after search:", filtered.length)
-    console.log("Services to display:", filtered)
-    setFilteredServices(filtered)
-  }, [selectedContract, searchTerm, services])
+    console.log("Looking for contracts belonging to Autotask company:", autotaskCompanyName)
+
+    // DEBUG: Log first few contracts to see structure
+    console.log("Sample contracts (first 3):", contracts.slice(0, 3))
+
+    // Find contracts that BELONG TO this Autotask company
+    // We need to match by finding the company in autotaskCompanies first, then match by ID
+    const matchingAutotaskCompany = autotaskCompanies.find(
+      (company) => company.companyName === autotaskCompanyName || company.companyName === autotaskCompany,
+    )
+
+    if (!matchingAutotaskCompany) {
+      console.log("Could not find matching Autotask company in companies list")
+      setFilteredContracts([])
+      return
+    }
+
+    const targetCompanyId = String(matchingAutotaskCompany.id)
+    console.log("Found matching Autotask company ID:", targetCompanyId)
+
+    const organizationContracts = contracts.filter((contract) => {
+      const contractCompanyId = String(contract.companyID)
+
+      console.log("Checking contract:", {
+        id: contract.id,
+        contractName: contract.contractName,
+        companyID: contract.companyID,
+        description: contract.description,
+      })
+
+      console.log("Contract belongs to company ID:", contractCompanyId)
+      console.log("Looking for Autotask company ID:", targetCompanyId)
+
+      // Match by ID (most reliable method)
+      const idMatch = contractCompanyId === targetCompanyId
+
+      console.log("ID match:", idMatch)
+      console.log("---")
+
+      return idMatch
+    })
+
+    console.log("Found contracts belonging to this Autotask company:", organizationContracts.length)
+    console.log("Contracts:", organizationContracts)
+
+    // Apply search filter to contract name and description
+    const filtered =
+      searchTerm.trim() === ""
+        ? organizationContracts
+        : organizationContracts.filter(
+            (contract) =>
+              (contract.contractName && contract.contractName.toLowerCase().includes(searchTerm.toLowerCase())) ||
+              (contract.description && contract.description.toLowerCase().includes(searchTerm.toLowerCase())),
+          )
+
+    console.log("Final filtered contracts after search:", filtered.length)
+    console.log("Search term:", searchTerm)
+    console.log("=== END DEBUG ===")
+
+    setFilteredContracts(filtered)
+  }, [selectedOrganization, searchTerm, contracts, organizationMappings, autotaskCompanies])
 
   const extractOrganizations = (csvData, billingConfig) => {
     const lines = csvData.fullData.split("\n")
@@ -306,8 +187,14 @@ function AutotaskContractServicesPage() {
 
   const fetchContracts = async () => {
     try {
+      setLoading(true)
+      setError(null)
+
       const response = await fetch("https://n8n-oitlabs.eastus.cloudapp.azure.com/webhook/autotaskcontractlist")
-      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`)
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`)
+      }
 
       const data = await response.json()
       const contractsArray = Array.isArray(data) ? data : data.contracts || []
@@ -315,27 +202,6 @@ function AutotaskContractServicesPage() {
     } catch (err) {
       console.error("Error fetching contracts:", err)
       setError(`Failed to fetch contracts: ${err.message}`)
-    }
-  }
-
-  const fetchServices = async () => {
-    try {
-      const response = await fetch("https://n8n-oitlabs.eastus.cloudapp.azure.com/webhook/autotaskserviceslist")
-      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`)
-
-      const data = await response.json()
-      const servicesArray = Array.isArray(data) ? data : data.services || []
-      
-      console.log("=== GENERAL SERVICES FETCH DEBUG ===")
-      console.log("General services fetched:", servicesArray.length)
-      if (servicesArray.length > 0) {
-        console.log("Sample service:", servicesArray[0])
-      }
-      console.log("=== END GENERAL SERVICES FETCH DEBUG ===")
-      
-      setServices(servicesArray)
-    } catch (err) {
-      console.error("Error fetching general services:", err)
     } finally {
       setLoading(false)
     }
@@ -344,42 +210,106 @@ function AutotaskContractServicesPage() {
   const fetchAutotaskCompanies = async () => {
     try {
       const response = await fetch("https://n8n-oitlabs.eastus.cloudapp.azure.com/webhook/autotaskorganisationlist")
-      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`)
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`)
+      }
 
       const data = await response.json()
       const companies = Array.isArray(data) ? data : data.companies || []
       setAutotaskCompanies(companies)
     } catch (err) {
       console.error("Error fetching Autotask companies:", err)
+      // Don't set error state here as contracts might still work
     }
   }
 
-  const getContractOrganization = (contract) => {
-    // If contract has organizationName from organized data, use it
-    if (contract.organizationName) {
-      return contract.organizationName
-    }
-    
-    // Fallback to original method
-    const contractCompany = autotaskCompanies.find((company) => String(company.id) === String(contract.companyID))
-    if (!contractCompany) return "Unknown Organization"
+  const getAutotaskIdFromMapping = (mappedValue) => {
+    // Extract ID from mappings like "Company Name (ID: 123)" or just return the company name
+    const idMatch = mappedValue.match(/\(ID:\s*(\d+)\)/)
+    return idMatch ? idMatch[1] : mappedValue
+  }
 
-    // Find the organization mapped to this company
-    for (const [org, mapping] of Object.entries(organizationMappings)) {
-      const companyName = mapping.replace(/\s*\(ID:\s*\d+\)\s*$/, "").trim()
-      if (companyName === contractCompany.companyName || mapping === contractCompany.companyName) {
-        return org
-      }
+  const generateFinalConfiguration = () => {
+    const finalConfiguration = {
+      billingConfiguration: billingConfig,
+      organizationMappings: organizationMappings,
+      contractsByOrganization: {},
+      csvData: {
+        headers: csvData.headers,
+        totalRows: csvData.fullData.split("\n").length - 1,
+      },
+      summary: {
+        totalOrganizations: organizations.length,
+        mappedOrganizations: Object.keys(organizationMappings).filter(
+          (key) => organizationMappings[key] !== "No Match Found",
+        ).length,
+        totalContracts: contracts.length,
+      },
+      timestamp: new Date().toISOString(),
     }
-    return contractCompany.companyName
+
+    // Add contract information for each organization
+    organizations.forEach((org) => {
+      const autotaskCompany = organizationMappings[org]
+      if (autotaskCompany && autotaskCompany !== "No Match Found") {
+        const autotaskCompanyName = autotaskCompany.replace(/\s*\(ID:\s*\d+\)\s*$/, "").trim()
+
+        const matchingAutotaskCompany = autotaskCompanies.find(
+          (company) => company.companyName === autotaskCompanyName || company.companyName === autotaskCompany,
+        )
+
+        if (matchingAutotaskCompany) {
+          const targetCompanyId = String(matchingAutotaskCompany.id)
+          const orgContracts = contracts.filter((contract) => {
+            return String(contract.companyID) === targetCompanyId
+          })
+
+          finalConfiguration.contractsByOrganization[org] = {
+            autotaskCompany: autotaskCompany,
+            autotaskId: targetCompanyId,
+            contracts: orgContracts.map((contract) => ({
+              id: contract.id,
+              contractName: contract.contractName || "Unnamed Contract",
+              description: contract.description || "No description available",
+            })),
+          }
+        }
+      }
+    })
+
+    const output = JSON.stringify(finalConfiguration, null, 2)
+    setJsonOutput(output)
+    setIsProcessingComplete(true)
+    sessionStorage.setItem("finalContractConfiguration", output)
+  }
+
+  const downloadJson = () => {
+    if (!jsonOutput) return
+    const blob = new Blob([jsonOutput], { type: "application/json" })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement("a")
+    a.href = url
+    a.download = `autotask-contracts-${Date.now()}.json`
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
   }
 
   const handleBack = () => {
-    router.push("/billing/vendor-settings/onboarding/autotask-contract-mapping")
+    router.push("/billing/vendor-settings/onboarding/autotask-company-mapping")
   }
 
   const handleNext = () => {
-    alert("Contract services review completed!")
+    router.push('/billing/vendor-settings/onboarding/autotask-contractservice-mapping')
+  }
+
+  const getFilteredOrganizations = () => {
+    if (showMappedOnly) {
+      return organizations.filter((org) => organizationMappings[org] && organizationMappings[org] !== "No Match Found")
+    }
+    return organizations
   }
 
   if (loading) {
@@ -388,7 +318,7 @@ function AutotaskContractServicesPage() {
         <div className="min-h-screen bg-gray-50 flex items-center justify-center">
           <div className="text-center">
             <Loader className="h-8 w-8 animate-spin text-blue-600 mx-auto mb-4" />
-            <p className="text-gray-600">Loading contract services...</p>
+            <p className="text-gray-600">Loading Autotask contracts...</p>
           </div>
         </div>
       </DashboardLayout>
@@ -405,10 +335,7 @@ function AutotaskContractServicesPage() {
               <p className="text-red-600 mb-4">{error}</p>
               <div className="flex gap-2 justify-center">
                 <button
-                  onClick={() => {
-                    fetchContracts()
-                    fetchServices()
-                  }}
+                  onClick={fetchContracts}
                   className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-sm font-medium rounded-lg"
                 >
                   Retry
@@ -441,15 +368,15 @@ function AutotaskContractServicesPage() {
                 >
                   <ArrowLeft className="h-5 w-5 text-gray-600 dark:text-gray-400" />
                 </button>
-                <div className="w-12 h-12 bg-purple-50 dark:bg-purple-900/20 rounded-xl flex items-center justify-center">
-                  <Settings className="h-6 w-6 text-purple-600 dark:text-purple-400" />
+                <div className="w-12 h-12 bg-blue-50 dark:bg-blue-900/20 rounded-xl flex items-center justify-center">
+                  <FileText className="h-6 w-6 text-blue-600 dark:text-blue-400" />
                 </div>
                 <div>
                   <h1 className="text-3xl font-light text-gray-900 dark:text-white tracking-tight">
-                    Contract Services
+                    Organization Contracts
                   </h1>
                   <p className="text-sm text-gray-500 dark:text-gray-400 font-normal">
-                    Step 5: Review services for each contract
+                    Step 4: Review contracts for each organization
                   </p>
                 </div>
               </div>
@@ -478,17 +405,10 @@ function AutotaskContractServicesPage() {
                 </div>
                 <ChevronRight className="h-4 w-4 text-gray-400" />
                 <div className="flex items-center">
-                  <div className="w-8 h-8 bg-green-600 text-white rounded-full flex items-center justify-center text-sm font-medium">
-                    <CheckCircle className="h-4 w-4" />
+                  <div className="w-8 h-8 bg-blue-600 text-white rounded-full flex items-center justify-center text-sm font-medium">
+                    4
                   </div>
                   <span className="ml-2 text-sm text-gray-600 dark:text-gray-400">Contracts</span>
-                </div>
-                <ChevronRight className="h-4 w-4 text-gray-400" />
-                <div className="flex items-center">
-                  <div className="w-8 h-8 bg-purple-600 text-white rounded-full flex items-center justify-center text-sm font-medium">
-                    5
-                  </div>
-                  <span className="ml-2 text-sm text-gray-600 dark:text-gray-400">Services</span>
                 </div>
               </div>
             </div>
@@ -498,98 +418,128 @@ function AutotaskContractServicesPage() {
               <div className="flex items-center justify-between">
                 <div className="flex items-center space-x-6">
                   <div className="flex items-center space-x-2">
-                    <FileText className="h-5 w-5 text-blue-600" />
+                    <Building className="h-5 w-5 text-blue-600" />
                     <span className="text-sm font-medium text-gray-900 dark:text-white">
-                      {availableContracts.length} Available Contracts
+                      {organizations.length} Organizations
                     </span>
                   </div>
                   <div className="flex items-center space-x-2">
-                    <Settings className="h-5 w-5 text-purple-600" />
+                    <FileText className="h-5 w-5 text-green-600" />
                     <span className="text-sm font-medium text-gray-900 dark:text-white">
-                      {services.length} Total Services
+                      {contracts.length} Total Contracts
                     </span>
                   </div>
                   <div className="flex items-center space-x-2">
-                    <Check className="h-5 w-5 text-green-600" />
+                    <Check className="h-5 w-5 text-purple-600" />
                     <span className="text-sm font-medium text-gray-900 dark:text-white">
-                      {selectedContract ? filteredServices.length : 0} Services for Selected
+                      {selectedOrganization ? filteredContracts.length : 0} Contracts for Selected
                     </span>
                   </div>
+                </div>
+
+                <div className="flex items-center space-x-2">
+                  <button
+                    onClick={() => setShowMappedOnly(!showMappedOnly)}
+                    className={`px-3 py-1 text-xs rounded-md transition-colors ${
+                      showMappedOnly
+                        ? "bg-blue-100 text-blue-800 dark:bg-blue-900/20 dark:text-blue-300"
+                        : "bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300"
+                    }`}
+                  >
+                    <Filter className="h-3 w-3 mr-1 inline" />
+                    {showMappedOnly ? "Show All" : "Mapped Only"}
+                  </button>
                 </div>
               </div>
             </div>
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            {/* Contracts List */}
+            {/* Organizations List */}
             <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-sm">
               <div className="p-4 border-b border-gray-200 dark:border-gray-700">
-                <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Contracts</h2>
-                <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">Click to view services</p>
+                <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Organizations</h2>
+                <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">Click to view contracts</p>
               </div>
 
               <div className="p-4">
                 <div className="space-y-2 max-h-96 overflow-y-auto">
-                  {availableContracts.map((contract) => (
-                    <button
-                      key={contract.id}
-                      onClick={() => setSelectedContract(contract)}
-                      className={`w-full text-left p-3 rounded-lg transition-all ${
-                        selectedContract?.id === contract.id
-                          ? "bg-purple-50 border-2 border-purple-200 dark:bg-purple-900/20 dark:border-purple-700"
-                          : "bg-gray-50 border border-gray-200 hover:bg-gray-100 dark:bg-gray-700 dark:border-gray-600 dark:hover:bg-gray-600"
-                      }`}
-                    >
-                      <div className="flex items-center justify-between">
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium text-gray-900 dark:text-white truncate">
-                            {contract.contractName || "Unnamed Contract"}
-                          </p>
-                          <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
-                            {getContractOrganization(contract)}
-                          </p>
-                          {contract.description && (
-                            <p className="text-xs text-gray-400 dark:text-gray-500 truncate mt-1">
-                              {contract.description}
-                            </p>
-                          )}
+                  {getFilteredOrganizations().map((org) => {
+                    const hasAutotaskMapping =
+                      organizationMappings[org] && organizationMappings[org] !== "No Match Found"
+
+                    return (
+                      <button
+                        key={org}
+                        onClick={() => setSelectedOrganization(org)}
+                        disabled={!hasAutotaskMapping}
+                        className={`w-full text-left p-3 rounded-lg transition-all ${
+                          selectedOrganization === org
+                            ? "bg-blue-50 border-2 border-blue-200 dark:bg-blue-900/20 dark:border-blue-700"
+                            : hasAutotaskMapping
+                              ? "bg-gray-50 border border-gray-200 hover:bg-gray-100 dark:bg-gray-700 dark:border-gray-600 dark:hover:bg-gray-600"
+                              : "bg-red-50 border border-red-200 dark:bg-red-900/20 dark:border-red-700 opacity-50 cursor-not-allowed"
+                        }`}
+                      >
+                        <div className="flex items-center justify-between">
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium text-gray-900 dark:text-white truncate">{org}</p>
+                            {hasAutotaskMapping && (
+                              <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
+                                → {organizationMappings[org]}
+                              </p>
+                            )}
+                          </div>
+                          <div className="flex items-center space-x-1">
+                            {!hasAutotaskMapping ? (
+                              <AlertTriangle className="h-4 w-4 text-red-500" title="No Autotask company mapped" />
+                            ) : (
+                              <Check className="h-4 w-4 text-green-500" />
+                            )}
+                          </div>
                         </div>
-                        <div className="flex items-center space-x-1">
-                          <Check className="h-4 w-4 text-green-500" />
-                        </div>
-                      </div>
-                    </button>
-                  ))}
+                      </button>
+                    )
+                  })}
                 </div>
               </div>
             </div>
 
-            {/* Services Viewer */}
+            {/* Contracts Viewer */}
             <div className="lg:col-span-2 bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-sm">
               <div className="p-4 border-b border-gray-200 dark:border-gray-700">
                 <div className="flex items-center justify-between">
                   <div>
                     <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
-                      {selectedContract ? `Services for ${selectedContract.contractName}` : "Services"}
+                      {selectedOrganization ? `Contracts for ${selectedOrganization}` : "Contracts"}
                     </h2>
                     <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-                      {selectedContract
-                        ? `Organization: ${getContractOrganization(selectedContract)}`
-                        : "Select a contract to view its services"}
+                      {selectedOrganization
+                        ? `Autotask company: ${organizationMappings[selectedOrganization] || "Not mapped"}`
+                        : "Select an organization to view its contracts"}
                     </p>
                   </div>
+                  {jsonOutput && (
+                    <button
+                      onClick={downloadJson}
+                      className="inline-flex items-center px-3 py-1 bg-green-600 hover:bg-green-700 text-white text-xs font-medium rounded-lg transition-colors"
+                    >
+                      <Download className="mr-1 h-3 w-3" />
+                      Download
+                    </button>
+                  )}
                 </div>
 
                 {/* Search */}
-                {selectedContract && (
+                {selectedOrganization && (
                   <div className="mt-3 relative">
                     <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
                     <input
                       type="text"
                       value={searchTerm}
                       onChange={(e) => setSearchTerm(e.target.value)}
-                      placeholder="Search services..."
-                      className="w-full pl-10 pr-4 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+                      placeholder="Search contracts..."
+                      className="w-full pl-10 pr-4 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     />
                   </div>
                 )}
@@ -597,15 +547,17 @@ function AutotaskContractServicesPage() {
 
               <div className="p-4">
                 <div className="max-h-96 overflow-y-auto">
-                  {!selectedContract ? (
+                  {!selectedOrganization ? (
                     <div className="text-center py-12 text-gray-500">
-                      <FileText className="h-12 w-12 mx-auto mb-3 text-gray-300" />
-                      <p>Select a contract to view its services</p>
+                      <Building className="h-12 w-12 mx-auto mb-3 text-gray-300" />
+                      <p>Select an organization to view its contracts</p>
                     </div>
-                  ) : filteredServices.length === 0 ? (
+                  ) : filteredContracts.length === 0 ? (
                     <div className="text-center py-8 text-gray-500">
-                      <Settings className="h-8 w-8 mx-auto mb-2 text-gray-300" />
-                      <p>Loading services for this contract...</p>
+                      <FileText className="h-8 w-8 mx-auto mb-2 text-gray-300" />
+                      <p>
+                        {searchTerm ? "No contracts match your search" : "No contracts found for this organization"}
+                      </p>
                     </div>
                   ) : (
                     <div className="overflow-x-auto">
@@ -613,48 +565,72 @@ function AutotaskContractServicesPage() {
                         <thead className="bg-gray-50 dark:bg-gray-700">
                           <tr>
                             <th className="text-left py-3 px-4 font-medium text-gray-900 dark:text-white border-b border-gray-200 dark:border-gray-600">
-                              Service Description
+                              Contract Name
                             </th>
                             <th className="text-left py-3 px-4 font-medium text-gray-900 dark:text-white border-b border-gray-200 dark:border-gray-600">
-                              Service ID
+                              Company
                             </th>
                             <th className="text-left py-3 px-4 font-medium text-gray-900 dark:text-white border-b border-gray-200 dark:border-gray-600">
-                              Unit Price
+                              Service Type
                             </th>
                             <th className="text-left py-3 px-4 font-medium text-gray-900 dark:text-white border-b border-gray-200 dark:border-gray-600">
-                              Unit Cost
+                              Start Date
                             </th>
                             <th className="text-left py-3 px-4 font-medium text-gray-900 dark:text-white border-b border-gray-200 dark:border-gray-600">
-                              Adjusted Price
+                              End Date
+                            </th>
+                            <th className="text-left py-3 px-4 font-medium text-gray-900 dark:text-white border-b border-gray-200 dark:border-gray-600">
+                              Amount
+                            </th>
+                            <th className="text-left py-3 px-4 font-medium text-gray-900 dark:text-white border-b border-gray-200 dark:border-gray-600">
+                              Status
                             </th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-200 dark:divide-gray-600">
-                          {filteredServices.map((service, index) => (
-                            <tr key={service.id || index} className="hover:bg-gray-50 dark:hover:bg-gray-700">
+                          {filteredContracts.map((contract, index) => (
+                            <tr key={contract.id || index} className="hover:bg-gray-50 dark:hover:bg-gray-700">
                               <td className="py-3 px-4 text-gray-900 dark:text-white">
                                 <div>
-                                  <div className="font-medium">
-                                    {service.invoiceDescription || service.internalDescription || "No description"}
-                                  </div>
-                                  {service.internalDescription &&
-                                    service.invoiceDescription &&
-                                    service.internalDescription !== service.invoiceDescription && (
-                                      <div className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-                                        Internal: {service.internalDescription}
-                                      </div>
-                                    )}
+                                  <div className="font-medium">{contract.contractName || "Unnamed Contract"}</div>
+                                  {contract.description && (
+                                    <div className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                                      {contract.description}
+                                    </div>
+                                  )}
                                 </div>
                               </td>
-                              <td className="py-3 px-4 text-gray-600 dark:text-gray-300">{service.serviceID || "-"}</td>
                               <td className="py-3 px-4 text-gray-600 dark:text-gray-300">
-                                ${Number.parseFloat(service.unitPrice || 0).toFixed(2)}
+                                {organizationMappings[selectedOrganization]
+                                  ?.replace(/\s*\(ID:\s*\d+\)\s*$/, "")
+                                  .trim() || selectedOrganization}
                               </td>
                               <td className="py-3 px-4 text-gray-600 dark:text-gray-300">
-                                ${Number.parseFloat(service.unitCost || 0).toFixed(2)}
+                                {contract.contractType_label || contract.contractType || "Recurring Service"}
                               </td>
                               <td className="py-3 px-4 text-gray-600 dark:text-gray-300">
-                                ${Number.parseFloat(service.internalCurrencyAdjustedPrice || 0).toFixed(2)}
+                                {contract.startDate ? new Date(contract.startDate).toLocaleDateString() : "-"}
+                              </td>
+                              <td className="py-3 px-4 text-gray-600 dark:text-gray-300">
+                                {contract.endDate ? new Date(contract.endDate).toLocaleDateString() : "-"}
+                              </td>
+                              <td className="py-3 px-4 text-gray-600 dark:text-gray-300">
+                                {contract.estimatedRevenue
+                                  ? `$${Number.parseFloat(contract.estimatedRevenue).toLocaleString()}`
+                                  : "$0.00"}
+                              </td>
+                              <td className="py-3 px-4">
+                                <span
+                                  className={`px-2 py-1 text-xs rounded-md ${
+                                    contract.status_label === "Active" || contract.status === 1
+                                      ? "bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-400"
+                                      : contract.status_label === "Inactive" || contract.status === 0
+                                        ? "bg-red-100 text-red-800 dark:bg-red-900/20 dark:text-red-400"
+                                        : "bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300"
+                                  }`}
+                                >
+                                  {contract.status_label || (contract.status === 1 ? "Active" : "Inactive")}
+                                </span>
                               </td>
                             </tr>
                           ))}
@@ -671,25 +647,48 @@ function AutotaskContractServicesPage() {
           <div className="mt-6 bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-sm p-6">
             <div className="flex items-center justify-between">
               <div>
-                <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Services Review Complete</h3>
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Review Complete</h3>
                 <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-                  All contract services have been reviewed and mapped
+                  Generate final configuration with all organization contracts
                 </p>
               </div>
               <div className="flex items-center space-x-3">
                 <button
-                  onClick={handleNext}
-                  className="px-6 py-3 bg-purple-600 hover:bg-purple-700 text-white text-sm font-medium rounded-xl transition-colors duration-200"
+                  onClick={generateFinalConfiguration}
+                  className="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-xl transition-colors duration-200"
                 >
-                  Complete Services Review
+                  Generate Final Configuration
                 </button>
+
+                {isProcessingComplete && (
+                  <button
+                    onClick={handleNext}
+                    className="px-6 py-3 bg-green-600 hover:bg-green-700 text-white text-sm font-medium rounded-xl transition-all duration-200 shadow-sm hover:shadow-md"
+                  >
+                    Complete Setup
+                  </button>
+                )}
               </div>
             </div>
           </div>
+
+          {/* JSON Output */}
+          {jsonOutput && (
+            <div className="mt-6 bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-sm">
+              <div className="p-4 border-b border-gray-200 dark:border-gray-700">
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Final Configuration</h3>
+              </div>
+              <div className="p-4">
+                <div className="bg-gray-900 rounded-lg p-4 max-h-64 overflow-auto">
+                  <pre className="text-sm text-green-400 font-mono whitespace-pre-wrap">{jsonOutput}</pre>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </DashboardLayout>
   )
 }
 
-export default AutotaskContractServicesPage
+export default AutotaskContractMappingPage
