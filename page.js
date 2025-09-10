@@ -21,11 +21,140 @@ function AutotaskContractServicesPage() {
   const [filteredServices, setFilteredServices] = useState([])
   const [availableContracts, setAvailableContracts] = useState([])
 
+  // Function to fetch services for a specific contract using the advanced endpoint
+  const fetchServicesForContract = async (contractId) => {
+    try {
+      console.log(`=== FETCHING SERVICES FOR CONTRACT ${contractId} ===`)
+      
+      // Try different formats to match your n8n workflow
+      const postUrl = "https://n8n-oitlabs.eastus.cloudapp.azure.com/webhook/autotaskservicesadvancedlist"
+      
+      // Format 1: Simple object with the key your n8n expects
+      const requestBody = {
+        "autotask contract id": contractId
+      }
+      
+      console.log("Trying POST request to:", postUrl)
+      console.log("Request body:", JSON.stringify(requestBody, null, 2))
+      
+      const response = await fetch(postUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(requestBody)
+      })
+      
+      console.log("Response status:", response.status)
+      
+      if (response.ok) {
+        const text = await response.text()
+        console.log("Response text:", text)
+        
+        if (!text || text.trim() === '') {
+          console.log("Empty response from API")
+          
+          // Try alternative format - sometimes n8n expects different structure
+          console.log("Trying alternative request format...")
+          
+          const altResponse = await fetch(postUrl, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(contractId) // Send just the contract ID as JSON
+          })
+          
+          if (altResponse.ok) {
+            const altText = await altResponse.text()
+            console.log("Alternative response text:", altText)
+            
+            if (altText && altText.trim() !== '') {
+              try {
+                const altData = JSON.parse(altText)
+                const altServices = Array.isArray(altData) ? altData : altData.services || []
+                console.log(`Alternative format found ${altServices.length} services`)
+                
+                const filtered = searchTerm.trim() === ""
+                  ? altServices
+                  : altServices.filter(
+                      (service) =>
+                        (service.invoiceDescription &&
+                          service.invoiceDescription.toLowerCase().includes(searchTerm.toLowerCase())) ||
+                        (service.internalDescription &&
+                          service.internalDescription.toLowerCase().includes(searchTerm.toLowerCase())),
+                    )
+                
+                setFilteredServices(filtered)
+                return
+              } catch (e) {
+                console.log("Alternative format also failed")
+              }
+            }
+          }
+          
+          // If both fail, use fallback
+          console.log("Both API attempts failed, falling back to existing services")
+          const fallbackServices = getServicesForContract(contractId)
+          setFilteredServices(fallbackServices)
+          return
+        }
+        
+        try {
+          const data = JSON.parse(text)
+          const contractServices = Array.isArray(data) ? data : data.services || []
+          
+          console.log(`Found ${contractServices.length} services for contract ${contractId}`)
+          console.log("Contract services:", contractServices)
+          
+          const filtered = searchTerm.trim() === ""
+            ? contractServices
+            : contractServices.filter(
+                (service) =>
+                  (service.invoiceDescription &&
+                    service.invoiceDescription.toLowerCase().includes(searchTerm.toLowerCase())) ||
+                  (service.internalDescription &&
+                    service.internalDescription.toLowerCase().includes(searchTerm.toLowerCase())),
+              )
+
+          console.log("Final filtered services after search:", filtered.length)
+          setFilteredServices(filtered)
+          return
+        } catch (jsonError) {
+          console.log("JSON parse error:", jsonError.message)
+        }
+      } else {
+        console.log("Response not OK, status:", response.status)
+      }
+      
+      // If everything fails, fall back to existing services
+      console.log("All API attempts failed, falling back to existing services")
+      const fallbackServices = getServicesForContract(contractId)
+      setFilteredServices(fallbackServices)
+      
+    } catch (err) {
+      console.error(`Error fetching services for contract ${contractId}:`, err)
+      
+      // Fallback to existing services
+      console.log("Using fallback: filtering existing services")
+      const fallbackServices = getServicesForContract(contractId)
+      setFilteredServices(fallbackServices)
+    }
+  }
+
+  // Function to get services for a specific contract from existing data (fallback only)
+  const getServicesForContract = (contractId) => {
+    const contractServices = services.filter(service => String(service.contractID) === String(contractId))
+    console.log(`Found ${contractServices.length} services for contract ${contractId} in existing data`)
+    return contractServices
+  }
+
   useEffect(() => {
-    // Retrieve data from sessionStorage
+    // Retrieve data from sessionStorage including the final contract configuration
     const storedOrgMappings = sessionStorage.getItem("organizationMappings")
     const storedCsvData = sessionStorage.getItem("vendorCsvData")
     const storedBillingConfig = sessionStorage.getItem("billingConfiguration")
+    const storedContractConfig = sessionStorage.getItem("finalContractConfiguration")
 
     if (!storedOrgMappings || !storedCsvData || !storedBillingConfig) {
       router.push("/billing/vendor-settings/onboarding")
@@ -41,10 +170,38 @@ function AutotaskContractServicesPage() {
     // Extract organizations from CSV
     extractOrganizations(csvDataParsed, billingConfigParsed)
 
-    // Fetch data
-    fetchContracts()
+    // Always fetch general services
     fetchServices()
-    fetchAutotaskCompanies()
+
+    // If we have the final contract configuration, use it to populate available contracts
+    if (storedContractConfig) {
+      const contractConfig = JSON.parse(storedContractConfig)
+      console.log("=== USING ORGANIZED CONTRACT DATA ===")
+      console.log("Contract configuration:", contractConfig)
+      
+      // Extract all contracts from the organized data
+      const organizedContracts = []
+      Object.entries(contractConfig.contractsByOrganization || {}).forEach(([org, orgData]) => {
+        if (orgData.contracts) {
+          orgData.contracts.forEach(contract => {
+            console.log(`Adding contract from ${org}:`, contract)
+            organizedContracts.push({
+              ...contract,
+              organizationName: org,
+              autotaskCompany: orgData.autotaskCompany
+            })
+          })
+        }
+      })
+      
+      console.log("All organized contracts:", organizedContracts)
+      setAvailableContracts(organizedContracts)
+      setContracts(organizedContracts)
+    } else {
+      // Fallback to original method if no organized data available
+      fetchContracts()
+      fetchAutotaskCompanies()
+    }
   }, [router])
 
   useEffect(() => {
@@ -54,75 +211,78 @@ function AutotaskContractServicesPage() {
       return
     }
 
-    console.log("=== SERVICE FILTERING DEBUG ===")
+    // Make sure services data is loaded
+    if (!services || services.length === 0) {
+      console.log("Services data not loaded yet, waiting...")
+      return
+    }
+
+    console.log("=== FILTERING SERVICES FOR SELECTED CONTRACT ===")
+    console.log("Selected contract:", selectedContract)
     console.log("Selected contract ID:", selectedContract.id)
-    console.log("Selected contract object:", selectedContract)
     console.log("Total services available:", services.length)
-
-    // Log first few services to see their structure
-    console.log("First 3 services structure:", services.slice(0, 3))
-
-    const contractServices = services.filter((service) => {
-      const serviceContractId = String(service.contractID)
-      const selectedContractId = String(selectedContract.id)
-
-      console.log("Checking service:", {
-        id: service.id,
-        contractID: service.contractID,
-        serviceID: service.serviceID,
-        invoiceDescription: service.invoiceDescription,
-        // Log all properties of the service to see what fields are available
-        allServiceProperties: Object.keys(service)
-      })
-
-      console.log("Service contractID (as string):", serviceContractId)
-      console.log("Selected contract ID (as string):", selectedContractId)
-
-      const match = serviceContractId === selectedContractId
-      console.log("Contract ID match:", match)
-      console.log("---")
-
-      return match
+    
+    // DEBUG: Check the structure of the first few services
+    console.log("=== SERVICE STRUCTURE DEBUG ===")
+    services.slice(0, 3).forEach((service, index) => {
+      console.log(`Service ${index + 1} structure:`, service)
+      console.log(`Service ${index + 1} keys:`, Object.keys(service))
     })
-
-    console.log("Found services for contract:", contractServices.length)
-
-    // Apply search filter
-    const filtered =
-      searchTerm.trim() === ""
-        ? contractServices
-        : contractServices.filter(
-            (service) =>
-              (service.invoiceDescription &&
-                service.invoiceDescription.toLowerCase().includes(searchTerm.toLowerCase())) ||
-              (service.internalDescription &&
-                service.internalDescription.toLowerCase().includes(searchTerm.toLowerCase())),
-          )
+    console.log("=== END SERVICE STRUCTURE DEBUG ===")
+    
+    // Get services for this specific contract from existing data
+    const contractServices = services.filter(service => {
+      // Try different possible field names for contract ID
+      const possibleContractIds = [
+        service.contractID,
+        service.contractId, 
+        service.contract_id,
+        service.ContractID,
+        service.Contract_ID,
+        service.contract,
+        service.Contract
+      ]
+      
+      console.log(`Service ${service.id} possible contract IDs:`, possibleContractIds)
+      
+      const selectedContractId = String(selectedContract.id)
+      
+      // Check each possible field
+      for (let i = 0; i < possibleContractIds.length; i++) {
+        const contractIdValue = possibleContractIds[i]
+        if (contractIdValue !== undefined && contractIdValue !== null) {
+          const serviceContractId = String(contractIdValue)
+          console.log(`Checking service ${service.id}: ${Object.keys(service)[i]} = "${serviceContractId}" vs selected "${selectedContractId}"`)
+          
+          const match = serviceContractId === selectedContractId
+          if (match) {
+            console.log("✅ MATCH FOUND!")
+            return true
+          }
+        }
+      }
+      
+      return false
+    })
+    
+    console.log(`Found ${contractServices.length} services for contract ${selectedContract.id}`)
+    console.log("Contract services:", contractServices)
+    
+    // Apply search filter if there's a search term
+    const filtered = searchTerm.trim() === ""
+      ? contractServices
+      : contractServices.filter(
+          (service) =>
+            (service.invoiceDescription &&
+              service.invoiceDescription.toLowerCase().includes(searchTerm.toLowerCase())) ||
+            (service.internalDescription &&
+              service.internalDescription.toLowerCase().includes(searchTerm.toLowerCase())),
+        )
 
     console.log("Final filtered services after search:", filtered.length)
-    console.log("=== END DEBUG ===")
-
+    console.log("Services to display:", filtered)
     setFilteredServices(filtered)
   }, [selectedContract, searchTerm, services])
-
-  useEffect(() => {
-    // Get contracts that have mapped organizations
-    if (contracts.length > 0 && autotaskCompanies.length > 0 && Object.keys(organizationMappings).length > 0) {
-      const mappedContracts = contracts.filter((contract) => {
-        // Find if this contract belongs to a company that has an organization mapping
-        const contractCompany = autotaskCompanies.find((company) => String(company.id) === String(contract.companyID))
-        if (!contractCompany) return false
-
-        // Check if any organization is mapped to this company
-        return Object.values(organizationMappings).some((mapping) => {
-          const companyName = mapping.replace(/\s*\(ID:\s*\d+\)\s*$/, "").trim()
-          return companyName === contractCompany.companyName || mapping === contractCompany.companyName
-        })
-      })
-
-      setAvailableContracts(mappedContracts)
-    }
-  }, [contracts, autotaskCompanies, organizationMappings])
 
   const extractOrganizations = (csvData, billingConfig) => {
     const lines = csvData.fullData.split("\n")
@@ -160,26 +320,22 @@ function AutotaskContractServicesPage() {
 
   const fetchServices = async () => {
     try {
-      const response = await fetch("https://n8n-oitlabs.eastus.cloudapp.azure.com/webhook/autotaskcontractservices")
+      const response = await fetch("https://n8n-oitlabs.eastus.cloudapp.azure.com/webhook/autotaskserviceslist")
       if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`)
 
       const data = await response.json()
       const servicesArray = Array.isArray(data) ? data : data.services || []
       
-      // Enhanced debugging for services
-      console.log("=== SERVICES FETCH DEBUG ===")
-      console.log("Raw services response:", data)
-      console.log("Services array length:", servicesArray.length)
+      console.log("=== GENERAL SERVICES FETCH DEBUG ===")
+      console.log("General services fetched:", servicesArray.length)
       if (servicesArray.length > 0) {
-        console.log("Sample service object:", servicesArray[0])
-        console.log("All properties in first service:", Object.keys(servicesArray[0]))
+        console.log("Sample service:", servicesArray[0])
       }
-      console.log("=== END SERVICES FETCH DEBUG ===")
+      console.log("=== END GENERAL SERVICES FETCH DEBUG ===")
       
       setServices(servicesArray)
     } catch (err) {
-      console.error("Error fetching services:", err)
-      setError(`Failed to fetch services: ${err.message}`)
+      console.error("Error fetching general services:", err)
     } finally {
       setLoading(false)
     }
@@ -199,6 +355,12 @@ function AutotaskContractServicesPage() {
   }
 
   const getContractOrganization = (contract) => {
+    // If contract has organizationName from organized data, use it
+    if (contract.organizationName) {
+      return contract.organizationName
+    }
+    
+    // Fallback to original method
     const contractCompany = autotaskCompanies.find((company) => String(company.id) === String(contract.companyID))
     if (!contractCompany) return "Unknown Organization"
 
@@ -443,7 +605,7 @@ function AutotaskContractServicesPage() {
                   ) : filteredServices.length === 0 ? (
                     <div className="text-center py-8 text-gray-500">
                       <Settings className="h-8 w-8 mx-auto mb-2 text-gray-300" />
-                      <p>{searchTerm ? "No services match your search" : "No services found for this contract"}</p>
+                      <p>Loading services for this contract...</p>
                     </div>
                   ) : (
                     <div className="overflow-x-auto">
