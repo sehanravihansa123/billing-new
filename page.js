@@ -3,318 +3,419 @@
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import DashboardLayout from "@/components/dashboard-layout.js"
-import {
-  ArrowLeft,
-  Download,
-  CheckCircle,
-  ChevronRight,
-  FileText,
-  Loader,
-  Search,
-  Check,
-  Building,
-  Filter,
-  AlertTriangle,
-  X,
-} from "lucide-react"
+import { ArrowLeft, CheckCircle, ChevronRight, FileText, Loader, Search, Check, Settings, X, Download } from "lucide-react"
 
-function AutotaskContractMappingPage() {
+function AutotaskContractServicesPage() {
   const router = useRouter()
-  const [csvData, setCsvData] = useState(null)
-  const [billingConfig, setBillingConfig] = useState(null)
-  const [organizationMappings, setOrganizationMappings] = useState({})
-  const [contracts, setContracts] = useState([])
-  const [organizations, setOrganizations] = useState([])
+  const [selectedContracts, setSelectedContracts] = useState({}) // From previous page
+  const [allServices, setAllServices] = useState([]) // Store all services from getservicesname webhook
+  const [contractServices, setContractServices] = useState({}) // { contractId: [services] }
   const [loading, setLoading] = useState(true)
+  const [loadingServices, setLoadingServices] = useState(true) // Track all services loading
+  const [loadingContractServices, setLoadingContractServices] = useState(false) // Track contract services loading
   const [error, setError] = useState(null)
   const [jsonOutput, setJsonOutput] = useState("")
   const [isProcessingComplete, setIsProcessingComplete] = useState(false)
-  const [autotaskCompanies, setAutotaskCompanies] = useState([])
 
-  // Updated UI State for single contract selection per organization
-  const [selectedOrganization, setSelectedOrganization] = useState(null)
+  // UI State
+  const [selectedContract, setSelectedContract] = useState(null)
   const [searchTerm, setSearchTerm] = useState("")
-  const [filteredContracts, setFilteredContracts] = useState([])
-  const [showMappedOnly, setShowMappedOnly] = useState(false)
-  const [selectedContractsByOrg, setSelectedContractsByOrg] = useState({}) // { orgName: contractId }
+  const [filteredServices, setFilteredServices] = useState([])
+  
+  // NEW: Service selection state
+  const [selectedServices, setSelectedServices] = useState({}) // { contractId: [serviceIds] }
+  const [showSelectedOnly, setShowSelectedOnly] = useState(false)
 
-  useEffect(() => {
-    // Retrieve data from sessionStorage
-    const storedCsvData = sessionStorage.getItem("vendorCsvData")
-    const storedBillingConfig = sessionStorage.getItem("billingConfiguration")
-    const storedOrgMappings = sessionStorage.getItem("organizationMappings")
-
-    console.log("=== COMPONENT LOADING DEBUG ===")
-    console.log("CSV Data in sessionStorage:", storedCsvData ? "Found" : "Missing")
-    console.log("Billing Config in sessionStorage:", storedBillingConfig ? "Found" : "Missing")
-    console.log("Organization Mappings in sessionStorage:", storedOrgMappings ? "Found" : "Missing")
-
-    if (!storedCsvData || !storedBillingConfig || !storedOrgMappings) {
-      console.log("Missing required data, redirecting to onboarding")
-      router.push("/billing/vendor-settings/onboarding")
-      return
-    }
-
-    const csvDataParsed = JSON.parse(storedCsvData)
-    const billingConfigParsed = JSON.parse(storedBillingConfig)
-    const orgMappingsParsed = JSON.parse(storedOrgMappings)
-
-    setCsvData(csvDataParsed)
-    setBillingConfig(billingConfigParsed)
-    setOrganizationMappings(orgMappingsParsed)
-
-    // Extract unique organizations from CSV
-    extractOrganizations(csvDataParsed, billingConfigParsed)
-
-    // Fetch contracts and companies
-    fetchAutotaskData()
-
-    console.log("=== END COMPONENT LOADING DEBUG ===")
-  }, [router])
-
-  // Simplified contract filtering - no complex validation since companies are pre-filtered
-  useEffect(() => {
-    if (!selectedOrganization) {
-      setFilteredContracts([])
-      return
-    }
-
-    const autotaskCompany = organizationMappings[selectedOrganization]
-
-    if (!autotaskCompany || autotaskCompany === "No Match Found") {
-      setFilteredContracts([])
-      return
-    }
-
-    const autotaskCompanyName = autotaskCompany.replace(/\s*\(ID:\s*\d+\)\s*$/, "").trim()
-
-    const matchingAutotaskCompany = autotaskCompanies.find(
-      (company) => company.companyName === autotaskCompanyName || company.companyName === autotaskCompany,
-    )
-
-    if (!matchingAutotaskCompany) {
-      setFilteredContracts([])
-      return
-    }
-
-    const targetCompanyId = String(matchingAutotaskCompany.id)
-    
-    const organizationContracts = contracts.filter((contract) => {
-      const contractCompanyId = String(contract.companyID)
-      return contractCompanyId === targetCompanyId
-    })
-
-    // Apply search filter to contract name and description
-    const filtered =
-      searchTerm.trim() === ""
-        ? organizationContracts
-        : organizationContracts.filter(
-            (contract) =>
-              (contract.contractName && contract.contractName.toLowerCase().includes(searchTerm.toLowerCase())) ||
-              (contract.description && contract.description.toLowerCase().includes(searchTerm.toLowerCase())),
-          )
-
-    setFilteredContracts(filtered)
-  }, [selectedOrganization, searchTerm, contracts, organizationMappings, autotaskCompanies])
-
-  const extractOrganizations = (csvData, billingConfig) => {
-    const lines = csvData.fullData.split("\n")
-    const headers = lines[0].split(",").map((h) => h.trim())
-    const rows = lines.slice(1).filter((line) => line.trim())
-
-    const orgColumnIndex = headers.indexOf(billingConfig.organizationColumn)
-
-    if (orgColumnIndex >= 0) {
-      const uniqueOrgs = new Set()
-      rows.forEach((row) => {
-        const cells = row.split(",").map((cell) => cell.trim())
-        const orgName = cells[orgColumnIndex]
-        if (orgName && orgName !== "") {
-          uniqueOrgs.add(orgName)
-        }
-      })
-      setOrganizations(Array.from(uniqueOrgs))
-    }
-  }
-
-  // Simplified data fetching
-  const fetchAutotaskData = async () => {
+  // -----------------------
+  // Load all services (run once on mount)
+  // -----------------------
+  const loadAllServices = async () => {
     try {
-      setLoading(true)
+      setLoadingServices(true)
       setError(null)
+      console.log("=== LOADING ALL SERVICES ===")
 
-      const [contractsResponse, companiesResponse] = await Promise.all([
-        fetch("https://n8n-oitlabs.eastus.cloudapp.azure.com/webhook/getcontracts"),
-        fetch("https://n8n-oitlabs.eastus.cloudapp.azure.com/webhook/autotaskorganisationlist")
-      ])
+      // Try POST method first (n8n webhooks often expect POST)
+      const response = await fetch("https://n8n-oitlabs.eastus.cloudapp.azure.com/webhook/getservicesname", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({}), // Empty body for POST
+      })
 
-      if (!contractsResponse.ok) {
-        throw new Error(`Contracts API error! status: ${contractsResponse.status}`)
+      console.log("All services response status:", response.status)
+
+      if (!response.ok) {
+        // If POST fails, try GET as fallback
+        console.log("POST failed, trying GET method...")
+        const getResponse = await fetch("https://n8n-oitlabs.eastus.cloudapp.azure.com/webhook/getservicesname", {
+          method: "GET",
+          headers: {
+            "Accept": "application/json",
+          },
+        })
+
+        if (!getResponse.ok) {
+          throw new Error(`Both POST and GET failed. GET status: ${getResponse.status}`)
+        }
+
+        const services = await getResponse.json()
+        console.log("All services loaded via GET:", services)
+        setAllServices(services)
+        return
       }
-      
-      if (!companiesResponse.ok) {
-        throw new Error(`Companies API error! status: ${companiesResponse.status}`)
-      }
 
-      const contractsData = await contractsResponse.json()
-      const companiesData = await companiesResponse.json()
-      
-      const contractsArray = Array.isArray(contractsData) ? contractsData : contractsData.contracts || []
-      const companiesArray = Array.isArray(companiesData) ? companiesData : companiesData.companies || []
-      
-      setContracts(contractsArray)
-      setAutotaskCompanies(companiesArray)
-      
+      const services = await response.json()
+      console.log("All services loaded via POST:", services)
+      console.log("Total services count:", services.length)
+
+      setAllServices(services)
     } catch (err) {
-      console.error("Error fetching Autotask data:", err)
-      setError(`Failed to fetch Autotask data: ${err.message}`)
+      console.error("Error loading all services:", err)
+      setError(`Failed to load services: ${err.message}. Check console for network details.`)
     } finally {
-      setLoading(false)
+      setLoadingServices(false)
     }
   }
 
-  // Simplified organization filtering - only show mapped organizations
-  const getFilteredOrganizations = () => {
-    const mappedOrganizations = organizations.filter(org => 
-      organizationMappings[org] && organizationMappings[org] !== "No Match Found"
-    )
-    
-    if (showMappedOnly) {
-      return mappedOrganizations.filter(org => !selectedContractsByOrg[org])
+  // -----------------------
+  // Load services for a specific contract (POST)
+  // -----------------------
+  const loadServicesForContract = async (contractId) => {
+    try {
+      setLoadingContractServices(true)
+      setError(null)
+      console.log(`=== LOADING SERVICES FOR CONTRACT ${contractId} ===`)
+
+      const response = await fetch("https://n8n-oitlabs.eastus.cloudapp.azure.com/webhook/getservices", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          contractIds: [contractId], // Use array format as per your n8n setup
+        }),
+      })
+
+      console.log(`Contract services response status for contract ${contractId}:`, response.status)
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`)
+      }
+
+      // Get response as text first to check if it's empty or malformed
+      const responseText = await response.text()
+      console.log(`Contract services raw response for ${contractId}:`, responseText)
+      console.log(`Response length: ${responseText.length}`)
+
+      if (!responseText || responseText.trim() === '') {
+        console.warn(`Empty response for contract ${contractId}, trying different request formats...`)
+        
+        // Try different request body formats
+        const alternativeFormats = [
+          { contractId: contractId }, // Singular contractId
+          { contractIds: contractId }, // contractIds as single value
+          { body: { contractIds: [contractId] } }, // Nested in body
+        ]
+        
+        for (const altFormat of alternativeFormats) {
+          console.log(`Trying alternative format for ${contractId}:`, JSON.stringify(altFormat))
+          
+          const altResponse = await fetch("https://n8n-oitlabs.eastus.cloudapp.azure.com/webhook/getservices", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify(altFormat),
+          })
+          
+          const altResponseText = await altResponse.text()
+          console.log(`Alternative response length:`, altResponseText.length)
+          
+          if (altResponseText && altResponseText.trim() !== '') {
+            console.log(`Alternative format worked! Response:`, altResponseText.substring(0, 200))
+            
+            try {
+              const contractServicesData = JSON.parse(altResponseText)
+              const servicesArray = Array.isArray(contractServicesData) ? contractServicesData : []
+              
+              setContractServices((prev) => ({
+                ...prev,
+                [String(contractId)]: servicesArray,
+              }))
+              return
+            } catch (parseErr) {
+              console.error(`Parse error with alternative format:`, parseErr)
+              continue
+            }
+          }
+        }
+        
+        // If all formats failed, set empty array
+        console.warn(`All request formats failed for contract ${contractId}`)
+        setContractServices((prev) => ({
+          ...prev,
+          [String(contractId)]: [],
+        }))
+        return
+      }
+
+      let contractServicesData
+      try {
+        contractServicesData = JSON.parse(responseText)
+      } catch (parseErr) {
+        console.error(`JSON parse error for contract ${contractId}:`, parseErr)
+        console.error(`Raw response was:`, responseText.substring(0, 500))
+        throw new Error(`Invalid JSON response: ${parseErr.message}`)
+      }
+
+      console.log(`Contract services for ${contractId}:`, contractServicesData)
+
+      // Since you mentioned the response is now clean JSON array, we can use it directly
+      let servicesArray = Array.isArray(contractServicesData) ? contractServicesData : []
+      
+      // Filter services to only include ones for the requested contract
+      servicesArray = servicesArray.filter(service => 
+        service.contractID === parseInt(contractId)
+      )
+      
+      console.log(`Total services received: ${contractServicesData.length}`)
+      console.log(`Filtered services for contract ${contractId}: ${servicesArray.length}`)
+
+      setContractServices((prev) => ({
+        ...prev,
+        [String(contractId)]: servicesArray,
+      }))
+    } catch (err) {
+      console.error(`Error loading services for contract ${contractId}:`, err)
+      setError(`Failed to load services for contract ${contractId}: ${err.message}`)
+    } finally {
+      setLoadingContractServices(false)
     }
-    
-    return mappedOrganizations
   }
 
-  const getSelectedContractsCount = () => {
-    return Object.keys(selectedContractsByOrg).length
+  // -----------------------
+  // Helper function to get service name by serviceID
+  // -----------------------
+  const getServiceNameById = (serviceId) => {
+    const service = allServices.find(s => s.id === serviceId)
+    return service ? service.name : `Service ${serviceId}`
   }
 
-  // Updated contract selection handler for single selection per organization
-  const handleSelectContract = (contractId) => {
-    if (!selectedOrganization) return
-    
-    setSelectedContractsByOrg(prev => ({
-      ...prev,
-      [selectedOrganization]: contractId
-    }))
-    
-    // Auto-select next unmapped organization
-    const nextUnmapped = getFilteredOrganizations().find(org => 
-      org !== selectedOrganization && !selectedContractsByOrg[org]
-    )
-    if (nextUnmapped) {
-      setSelectedOrganization(nextUnmapped)
-    }
-  }
-
-  // Helper function to check if contract is selected for current org
-  const isContractSelected = (contractId) => {
-    return selectedContractsByOrg[selectedOrganization] === contractId
-  }
-
-  // Clear contract selection for an organization
-  const clearContractMapping = (orgName) => {
-    setSelectedContractsByOrg(prev => {
-      const newMappings = { ...prev }
-      delete newMappings[orgName]
-      return newMappings
+  // NEW: Service selection handlers
+  const handleSelectService = (contractId, serviceId) => {
+    setSelectedServices(prev => {
+      const contractServices = prev[contractId] || []
+      const isSelected = contractServices.includes(serviceId)
+      
+      if (isSelected) {
+        // Remove service
+        return {
+          ...prev,
+          [contractId]: contractServices.filter(id => id !== serviceId)
+        }
+      } else {
+        // Add service
+        return {
+          ...prev,
+          [contractId]: [...contractServices, serviceId]
+        }
+      }
     })
   }
 
-  // Simplified configuration generation
-  const generateFinalConfiguration = () => {
-    const mappedOrganizations = getFilteredOrganizations()
-    const missingSelections = mappedOrganizations.filter(org => !selectedContractsByOrg[org])
-    
-    if (missingSelections.length > 0) {
-      setError(`Please select contracts for: ${missingSelections.join(', ')}`)
-      return
-    }
-    
-    if (mappedOrganizations.length === 0) {
-      setError("No mapped organizations found. Please go back and complete the company mapping step.")
-      return
-    }
+  const isServiceSelected = (contractId, serviceId) => {
+    const contractServices = selectedServices[contractId] || []
+    return contractServices.includes(serviceId)
+  }
 
-    const finalConfiguration = {
-      billingConfiguration: billingConfig,
-      organizationMappings: organizationMappings,
-      selectedContracts: {},
-      contractSelectionSummary: [],
-      csvData: {
-        headers: csvData.headers,
-        totalRows: csvData.fullData.split("\n").length - 1,
-      },
+  const clearServiceSelection = (contractId, serviceId) => {
+    setSelectedServices(prev => {
+      const contractServices = prev[contractId] || []
+      return {
+        ...prev,
+        [contractId]: contractServices.filter(id => id !== serviceId)
+      }
+    })
+  }
+
+  const getTotalSelectedServices = () => {
+    return Object.values(selectedServices).flat().length
+  }
+
+  const getSelectedServicesForContract = (contractId) => {
+    return selectedServices[contractId] || []
+  }
+
+  // NEW: Generate final configuration with selected services
+  const generateFinalConfiguration = () => {
+    const finalConfig = {
+      selectedContracts,
+      contractServices,
+      selectedServices,
+      allServices, // Include the services lookup for reference
+      serviceSelectionSummary: [],
       summary: {
-        totalOrganizations: organizations.length,
-        mappedOrganizations: mappedOrganizations.length,
-        selectedContracts: Object.keys(selectedContractsByOrg).length,
+        totalContracts: Object.keys(selectedContracts).length,
+        totalAvailableServices: Object.values(contractServices).flat().length,
+        totalSelectedServices: getTotalSelectedServices(),
+        selectionsByContract: Object.entries(selectedServices).map(([contractId, serviceIds]) => ({
+          contractId,
+          selectedCount: serviceIds.length,
+          availableCount: (contractServices[contractId] || []).length
+        }))
       },
       timestamp: new Date().toISOString(),
     }
 
-    // Build selected contracts mapping and summary
-    Object.entries(selectedContractsByOrg).forEach(([org, contractId]) => {
-      const contract = contracts.find(c => c.id === contractId)
-      const autotaskCompany = organizationMappings[org]
+    // Build detailed service selection summary
+    Object.entries(selectedServices).forEach(([contractId, serviceIds]) => {
+      const contractData = Object.values(selectedContracts).find(c => String(c.contractId) === contractId)
+      const allContractServices = contractServices[contractId] || []
       
-      if (contract && autotaskCompany) {
-        const autotaskCompanyName = autotaskCompany.replace(/\s*\(ID:\s*\d+\)\s*$/, "").trim()
-        const matchingAutotaskCompany = autotaskCompanies.find(
-          company => company.companyName === autotaskCompanyName
-        )
-        
-        const contractData = {
-          contractId: contract.id,
-          contractName: contract.contractName || "Unnamed Contract",
-          autotaskCompany: autotaskCompany,
-          autotaskCompanyId: matchingAutotaskCompany?.id,
-          description: contract.description,
-          estimatedRevenue: contract.estimatedRevenue,
-          startDate: contract.startDate,
-          endDate: contract.endDate,
-          status: contract.status
+      serviceIds.forEach(serviceId => {
+        const service = allContractServices.find(s => s.id === serviceId || s.serviceID === serviceId)
+        if (service && contractData) {
+          finalConfig.serviceSelectionSummary.push({
+            contractId: contractId,
+            contractName: contractData.contractName,
+            organizationName: contractData.organizationName || Object.keys(selectedContracts).find(org => selectedContracts[org].contractId === contractData.contractId),
+            serviceId: service.serviceID || service.id,
+            serviceName: getServiceNameById(service.serviceID || service.id),
+            unitPrice: service.unitPrice || service.internalCurrencyUnitPrice || 0,
+            unitCost: service.unitCost || 0,
+            adjustedPrice: service.internalCurrencyAdjustedPrice || 0,
+            invoiceDescription: service.invoiceDescription,
+            internalDescription: service.internalDescription
+          })
         }
-        
-        finalConfiguration.selectedContracts[org] = contractData
-        
-        finalConfiguration.contractSelectionSummary.push({
-          organizationName: org,
-          ...contractData
-        })
-      }
+      })
     })
 
-    const output = JSON.stringify(finalConfiguration, null, 2)
+    const output = JSON.stringify(finalConfig, null, 2)
     setJsonOutput(output)
     setIsProcessingComplete(true)
     
-    sessionStorage.setItem("finalContractConfiguration", output)
-    
-    console.log('Contract selection complete:', finalConfiguration.contractSelectionSummary)
-    setError(null)
+    sessionStorage.setItem("finalServicesConfiguration", output)
+    console.log("Final configuration with selected services:", finalConfig)
   }
 
   const downloadJson = () => {
     if (!jsonOutput) return
     
     const timestamp = new Date().toISOString().split('T')[0]
-    const orgCount = Object.keys(selectedContractsByOrg).length
+    const serviceCount = getTotalSelectedServices()
     
     const blob = new Blob([jsonOutput], { type: "application/json" })
     const url = URL.createObjectURL(blob)
     const a = document.createElement("a")
     a.href = url
-    a.download = `contract-selections-${orgCount}orgs-${timestamp}.json`
+    a.download = `service-selections-${serviceCount}services-${timestamp}.json`
     document.body.appendChild(a)
     a.click()
     document.body.removeChild(a)
     URL.revokeObjectURL(url)
   }
 
+  // -----------------------
+  // On mount: load selectedContracts from session and load all services
+  // -----------------------
+  useEffect(() => {
+    const storedContractConfig = sessionStorage.getItem("finalContractConfiguration")
+
+    if (!storedContractConfig) {
+      console.log("No contract configuration found, redirecting...")
+      router.push("/billing/vendor-settings/onboarding/autotask-contract-mapping")
+      return
+    }
+
+    const contractConfig = JSON.parse(storedContractConfig)
+    console.log("=== LOADING CONTRACT SERVICES PAGE ===")
+    console.log("Contract configuration:", contractConfig)
+
+    // Extract selected contracts
+    const contracts = contractConfig.selectedContracts || {}
+    setSelectedContracts(contracts)
+
+    // Load all services first
+    loadAllServices().then(() => {
+      // Auto-select first contract after services are loaded
+      const firstContract = Object.values(contracts)[0]
+      if (firstContract) {
+        setSelectedContract(firstContract)
+        loadServicesForContract(firstContract.contractId)
+      }
+      setLoading(false)
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [router])
+
+  const handleSelectContract = async (contract) => {
+    setSelectedContract(contract)
+    setSearchTerm("") // Clear search when switching contracts
+
+    // Load services for this contract if not already loaded
+    if (!contractServices[String(contract.contractId)]) {
+      await loadServicesForContract(contract.contractId)
+    }
+  }
+
+  // Filter and enhance services when contract or search term changes
+  useEffect(() => {
+    if (!selectedContract) {
+      setFilteredServices([])
+      return
+    }
+
+    const contractId = String(selectedContract.contractId)
+    const services = contractServices[contractId] || []
+
+    console.log(`Filtering services for contract ${contractId}:`, services)
+
+    // Enhance services with service names from allServices lookup
+    const servicesWithNames = services.map((contractService) => {
+      const serviceId = contractService.serviceID
+      const serviceName = getServiceNameById(serviceId)
+      
+      return {
+        ...contractService,
+        serviceName: serviceName,
+      }
+    })
+
+    console.log("Services with names:", servicesWithNames)
+
+    // Apply search filter
+    let filtered = searchTerm.trim() === ""
+      ? servicesWithNames
+      : servicesWithNames.filter((service) => {
+          const serviceName = (service.serviceName || "").toLowerCase()
+          const invoiceDesc = (service.invoiceDescription || "").toLowerCase()
+          const internalDesc = (service.internalDescription || "").toLowerCase()
+          const searchLower = searchTerm.toLowerCase()
+
+          return (
+            serviceName.includes(searchLower) ||
+            invoiceDesc.includes(searchLower) ||
+            internalDesc.includes(searchLower) ||
+            String(service.serviceID || "").includes(searchLower)
+          )
+        })
+
+    // Apply selected-only filter
+    if (showSelectedOnly) {
+      const selectedServiceIds = getSelectedServicesForContract(contractId)
+      filtered = filtered.filter(service => 
+        selectedServiceIds.includes(service.serviceID || service.id)
+      )
+    }
+
+    setFilteredServices(filtered)
+  }, [selectedContract, searchTerm, contractServices, allServices, selectedServices, showSelectedOnly])
+
   const handleBack = () => {
-    router.push("/billing/vendor-settings/onboarding/autotask-company-mapping")
+    router.push("/billing/vendor-settings/onboarding/autotask-contract-mapping")
   }
 
   const handleNext = () => {
@@ -323,33 +424,55 @@ function AutotaskContractMappingPage() {
       return
     }
     
-    router.push("/billing/vendor-settings/onboarding/autotask-contractservice-mapping")
+    // Navigate to completion page
+    router.push("/billing/vendor-settings/complete")
   }
 
-  if (loading) {
+  const getAvailableContracts = () => {
+    return Object.entries(selectedContracts).map(([orgName, contractData]) => ({
+      organizationName: orgName,
+      ...contractData,
+    }))
+  }
+
+  const getServicesCount = (contractId) => {
+    const services = contractServices[String(contractId)] || []
+    return services.length
+  }
+
+  const getTotalServicesCount = () => {
+    return Object.values(contractServices).flat().length
+  }
+
+  if (loading || loadingServices) {
     return (
       <DashboardLayout>
         <div className="min-h-screen bg-gray-50 flex items-center justify-center">
           <div className="text-center">
             <Loader className="h-8 w-8 animate-spin text-blue-600 mx-auto mb-4" />
-            <p className="text-gray-600">Loading Autotask data...</p>
+            <p className="text-gray-600">
+              {loadingServices ? "Loading all services..." : "Initializing..."}
+            </p>
           </div>
         </div>
       </DashboardLayout>
     )
   }
 
-  if (error && !contracts.length) {
+  if (error) {
     return (
       <DashboardLayout>
         <div className="min-h-screen bg-gray-50 flex items-center justify-center">
           <div className="text-center max-w-md">
             <div className="bg-red-50 border border-red-200 rounded-lg p-6">
-              <h3 className="text-lg font-semibold text-red-800 mb-2">Error Loading Data</h3>
+              <h3 className="text-lg font-semibold text-red-800 mb-2">Error Loading Services</h3>
               <p className="text-red-600 mb-4">{error}</p>
               <div className="flex gap-2 justify-center">
                 <button
-                  onClick={fetchAutotaskData}
+                  onClick={() => {
+                    setError(null)
+                    loadAllServices()
+                  }}
                   className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-sm font-medium rounded-lg"
                 >
                   Retry
@@ -368,6 +491,8 @@ function AutotaskContractMappingPage() {
     )
   }
 
+  const availableContracts = getAvailableContracts()
+
   return (
     <DashboardLayout>
       <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
@@ -382,15 +507,15 @@ function AutotaskContractMappingPage() {
                 >
                   <ArrowLeft className="h-5 w-5 text-gray-600 dark:text-gray-400" />
                 </button>
-                <div className="w-12 h-12 bg-blue-50 dark:bg-blue-900/20 rounded-xl flex items-center justify-center">
-                  <FileText className="h-6 w-6 text-blue-600 dark:text-blue-400" />
+                <div className="w-12 h-12 bg-purple-50 dark:bg-purple-900/20 rounded-xl flex items-center justify-center">
+                  <Settings className="h-6 w-6 text-purple-600 dark:text-purple-400" />
                 </div>
                 <div>
                   <h1 className="text-3xl font-light text-gray-900 dark:text-white tracking-tight">
-                    Organization Contracts
+                    Contract Services
                   </h1>
                   <p className="text-sm text-gray-500 dark:text-gray-400 font-normal">
-                    Step 4: Select one contract per organization
+                    Step 5: Select services for selected contracts
                   </p>
                 </div>
               </div>
@@ -419,35 +544,42 @@ function AutotaskContractMappingPage() {
                 </div>
                 <ChevronRight className="h-4 w-4 text-gray-400" />
                 <div className="flex items-center">
-                  <div className="w-8 h-8 bg-blue-600 text-white rounded-full flex items-center justify-center text-sm font-medium">
-                    4
+                  <div className="w-8 h-8 bg-green-600 text-white rounded-full flex items-center justify-center text-sm font-medium">
+                    <CheckCircle className="h-4 w-4" />
                   </div>
                   <span className="ml-2 text-sm text-gray-600 dark:text-gray-400">Contracts</span>
+                </div>
+                <ChevronRight className="h-4 w-4 text-gray-400" />
+                <div className="flex items-center">
+                  <div className="w-8 h-8 bg-purple-600 text-white rounded-full flex items-center justify-center text-sm font-medium">
+                    5
+                  </div>
+                  <span className="ml-2 text-sm text-gray-600 dark:text-gray-400">Services</span>
                 </div>
               </div>
             </div>
 
-            {/* Stats Bar - Simplified */}
+            {/* Stats Bar - Enhanced */}
             <div className="mt-6 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4">
               <div className="flex items-center justify-between">
                 <div className="flex items-center space-x-6">
                   <div className="flex items-center space-x-2">
-                    <Building className="h-5 w-5 text-blue-600" />
+                    <FileText className="h-5 w-5 text-blue-600" />
                     <span className="text-sm font-medium text-gray-900 dark:text-white">
-                      {getFilteredOrganizations().length} Organizations Available
+                      {availableContracts.length} Selected Contracts
                     </span>
                   </div>
                   <div className="flex items-center space-x-2">
-                    <FileText className="h-5 w-5 text-purple-600" />
+                    <Settings className="h-5 w-5 text-purple-600" />
                     <span className="text-sm font-medium text-gray-900 dark:text-white">
-                      {selectedOrganization ? filteredContracts.length : 0} Contracts for Selected
+                      {getTotalServicesCount()} Available Services
                     </span>
                   </div>
-                  {getSelectedContractsCount() > 0 && (
+                  {getTotalSelectedServices() > 0 && (
                     <div className="flex items-center space-x-2">
                       <CheckCircle className="h-5 w-5 text-green-600" />
                       <span className="text-sm font-medium text-gray-900 dark:text-white">
-                        {getSelectedContractsCount()} Contracts Selected
+                        {getTotalSelectedServices()} Services Selected
                       </span>
                     </div>
                   )}
@@ -455,15 +587,15 @@ function AutotaskContractMappingPage() {
 
                 <div className="flex items-center space-x-2">
                   <button
-                    onClick={() => setShowMappedOnly(!showMappedOnly)}
+                    onClick={() => setShowSelectedOnly(!showSelectedOnly)}
                     className={`px-3 py-1 text-xs rounded-md transition-colors ${
-                      showMappedOnly
-                        ? "bg-blue-100 text-blue-800 dark:bg-blue-900/20 dark:text-blue-300"
+                      showSelectedOnly
+                        ? "bg-purple-100 text-purple-800 dark:bg-purple-900/20 dark:text-purple-300"
                         : "bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300"
                     }`}
                   >
-                    <Filter className="h-3 w-3 mr-1 inline" />
-                    {showMappedOnly ? "Show All" : "Unmapped Only"}
+                    <Check className="h-3 w-3 mr-1 inline" />
+                    {showSelectedOnly ? "Show All" : "Selected Only"}
                   </button>
                 </div>
               </div>
@@ -471,95 +603,95 @@ function AutotaskContractMappingPage() {
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            {/* Organizations List - Simplified */}
+            {/* Selected Contracts List */}
             <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-sm">
               <div className="p-4 border-b border-gray-200 dark:border-gray-700">
-                <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Organizations</h2>
-                <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-                  Click to select and view contracts
-                </p>
+                <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Selected Contracts</h2>
+                <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">Click to view and select services</p>
               </div>
 
               <div className="p-4">
                 <div className="space-y-2 max-h-96 overflow-y-auto">
-                  {getFilteredOrganizations().length === 0 ? (
-                    <div className="text-center py-8 text-gray-500">
-                      <AlertTriangle className="h-8 w-8 mx-auto mb-2 text-red-400" />
-                      <p className="text-sm font-medium">No Organizations Available</p>
-                      <p className="text-xs mt-1">
-                        No organizations are mapped to companies with contracts. Please go back to the company mapping step.
-                      </p>
-                    </div>
-                  ) : (
-                    getFilteredOrganizations().map((org) => {
-                      const hasSelectedContract = selectedContractsByOrg[org]
-
-                      return (
-                        <button
-                          key={org}
-                          onClick={() => setSelectedOrganization(org)}
-                          className={`w-full text-left p-3 rounded-lg transition-all ${
-                            selectedOrganization === org
-                              ? "bg-blue-50 border-2 border-blue-200 dark:bg-blue-900/20 dark:border-blue-700"
-                              : hasSelectedContract
-                              ? "bg-green-50 border border-green-200 dark:bg-green-900/20 dark:border-green-700"
-                              : "bg-gray-50 border border-gray-200 hover:bg-gray-100 dark:bg-gray-700 dark:border-gray-600 dark:hover:bg-gray-600"
-                          }`}
-                        >
-                          <div className="flex items-center justify-between">
-                            <div className="flex-1 min-w-0">
-                              <p className="text-sm font-medium text-gray-900 dark:text-white truncate">{org}</p>
-                              <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
-                                → {organizationMappings[org]}
+                  {availableContracts.map((contract) => {
+                    const selectedCount = getSelectedServicesForContract(String(contract.contractId)).length
+                    const totalCount = getServicesCount(contract.contractId)
+                    
+                    return (
+                      <button
+                        key={contract.contractId}
+                        onClick={() => handleSelectContract(contract)}
+                        className={`w-full text-left p-3 rounded-lg transition-all ${
+                          selectedContract?.contractId === contract.contractId
+                            ? "bg-purple-50 border-2 border-purple-200 dark:bg-purple-900/20 dark:border-purple-700"
+                            : selectedCount > 0
+                            ? "bg-green-50 border border-green-200 dark:bg-green-900/20 dark:border-green-700"
+                            : "bg-gray-50 border border-gray-200 hover:bg-gray-100 dark:bg-gray-700 dark:border-gray-600 dark:hover:bg-gray-600"
+                        }`}
+                      >
+                        <div className="flex items-center justify-between">
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium text-gray-900 dark:text-white truncate">
+                              {contract.contractName || "Unnamed Contract"}
+                            </p>
+                            <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
+                              {contract.organizationName}
+                            </p>
+                            {contract.description && (
+                              <p className="text-xs text-gray-400 dark:text-gray-500 truncate mt-1">
+                                {contract.description}
                               </p>
-                              {hasSelectedContract && (
-                                <p className="text-xs text-green-600 dark:text-green-400 truncate mt-1">
-                                  ✓ Contract selected
-                                </p>
+                            )}
+                            <p className="text-xs mt-1">
+                              <span className={selectedCount > 0 ? "text-green-600 dark:text-green-400" : "text-gray-500"}>
+                                {selectedCount > 0 ? `${selectedCount} selected` : `${totalCount} services`}
+                              </span>
+                              {selectedCount > 0 && totalCount > selectedCount && (
+                                <span className="text-gray-500"> of {totalCount}</span>
                               )}
-                            </div>
-                            <div className="flex items-center space-x-1">
-                              {hasSelectedContract ? (
-                                <CheckCircle className="h-4 w-4 text-green-500" title="Contract selected" />
-                              ) : (
-                                <Check className="h-4 w-4 text-gray-400" title="Ready for contract selection" />
-                              )}
-                            </div>
+                            </p>
                           </div>
-                        </button>
-                      )
-                    })
-                  )}
+                          <div className="flex items-center space-x-1">
+                            {selectedCount > 0 ? (
+                              <CheckCircle className="h-4 w-4 text-green-500" />
+                            ) : (
+                              <Check className="h-4 w-4 text-gray-400" />
+                            )}
+                          </div>
+                        </div>
+                      </button>
+                    )
+                  })}
                 </div>
               </div>
             </div>
 
-            {/* Contracts Viewer - Simplified */}
+            {/* Services Viewer - Enhanced with selection */}
             <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-sm">
               <div className="p-4 border-b border-gray-200 dark:border-gray-700">
                 <div className="flex items-center justify-between">
                   <div>
                     <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
-                      {selectedOrganization ? `Contracts for ${selectedOrganization}` : "Contracts"}
+                      {selectedContract ? `Services for ${selectedContract.contractName}` : "Services"}
                     </h2>
                     <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-                      {selectedOrganization
-                        ? `Select one contract for this organization`
-                        : "Select an organization to view its contracts"}
+                      {selectedContract
+                        ? `Click to select services for ${selectedContract.organizationName}`
+                        : "Select a contract to view its services"}
                     </p>
                   </div>
+                  {loadingContractServices && <Loader className="h-5 w-5 animate-spin text-purple-600" />}
                 </div>
 
                 {/* Search */}
-                {selectedOrganization && (
+                {selectedContract && (
                   <div className="mt-3 relative">
                     <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
                     <input
                       type="text"
                       value={searchTerm}
                       onChange={(e) => setSearchTerm(e.target.value)}
-                      placeholder="Search contracts..."
-                      className="w-full pl-10 pr-4 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      placeholder="Search services..."
+                      className="w-full pl-10 pr-4 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
                     />
                   </div>
                 )}
@@ -567,80 +699,88 @@ function AutotaskContractMappingPage() {
 
               <div className="p-4">
                 <div className="max-h-96 overflow-y-auto">
-                  {!selectedOrganization ? (
+                  {!selectedContract ? (
                     <div className="text-center py-12 text-gray-500">
-                      <Building className="h-12 w-12 mx-auto mb-3 text-gray-300" />
-                      <p>Select an organization to view its contracts</p>
+                      <FileText className="h-12 w-12 mx-auto mb-3 text-gray-300" />
+                      <p>Select a contract to view its services</p>
                     </div>
-                  ) : filteredContracts.length === 0 ? (
+                  ) : loadingContractServices ? (
+                    <div className="text-center py-8">
+                      <Loader className="h-6 w-6 animate-spin text-purple-600 mx-auto mb-2" />
+                      <p className="text-sm text-gray-500">Loading services for this contract...</p>
+                    </div>
+                  ) : filteredServices.length === 0 ? (
                     <div className="text-center py-8 text-gray-500">
-                      <FileText className="h-8 w-8 mx-auto mb-2 text-gray-300" />
-                      <p>
-                        {searchTerm ? "No contracts match your search" : "No contracts found for this organization"}
-                      </p>
+                      <Settings className="h-8 w-8 mx-auto mb-2 text-gray-300" />
+                      <p>{searchTerm ? "No services match your search" : "No services found for this contract"}</p>
                     </div>
                   ) : (
                     <div className="space-y-2">
-                      {filteredContracts.map((contract, index) => (
-                        <button
-                          key={contract.id || index}
-                          onClick={() => handleSelectContract(contract.id)}
-                          className={`w-full text-left p-3 rounded-lg border transition-all ${
-                            isContractSelected(contract.id)
-                              ? "bg-blue-50 border-2 border-blue-200 dark:bg-blue-900/20 dark:border-blue-700"
-                              : "border-gray-200 hover:border-blue-300 hover:bg-blue-50 dark:border-gray-600 dark:hover:border-blue-500 dark:hover:bg-blue-900/20"
-                          }`}
-                        >
-                          <div className="flex items-center justify-between">
-                            <div className="flex-1 min-w-0">
-                              <div className="font-medium text-gray-900 dark:text-white">
-                                {contract.contractName || "Unnamed Contract"}
-                              </div>
-                              {contract.description && (
-                                <div className="text-sm text-gray-500 dark:text-gray-400 mt-1 truncate">
-                                  {contract.description}
+                      {filteredServices.map((service, index) => {
+                        const contractId = String(selectedContract.contractId)
+                        const serviceId = service.serviceID || service.id
+                        const isSelected = isServiceSelected(contractId, serviceId)
+                        
+                        return (
+                          <button
+                            key={serviceId || index}
+                            onClick={() => handleSelectService(contractId, serviceId)}
+                            className={`w-full text-left p-3 rounded-lg border transition-all ${
+                              isSelected
+                                ? "bg-purple-50 border-2 border-purple-200 dark:bg-purple-900/20 dark:border-purple-700"
+                                : "border-gray-200 hover:border-purple-300 hover:bg-purple-50 dark:border-gray-600 dark:hover:border-purple-500 dark:hover:bg-purple-900/20"
+                            }`}
+                          >
+                            <div className="flex items-center justify-between">
+                              <div className="flex-1 min-w-0">
+                                <div className="font-medium text-gray-900 dark:text-white">
+                                  {service.serviceName}
                                 </div>
-                              )}
-                              <div className="flex items-center space-x-4 mt-2 text-xs text-gray-500">
-                                <span>
-                                  {contract.contractType_label || contract.contractType || "Recurring Service"}
-                                </span>
-                                <span>
-                                  {contract.estimatedRevenue
-                                    ? `$${Number.parseFloat(contract.estimatedRevenue).toLocaleString()}`
-                                    : "$0.00"}
-                                </span>
-                                <span
-                                  className={`px-2 py-1 rounded-md ${
-                                    contract.status_label === "Active" || contract.status === 1
-                                      ? "bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-400"
-                                      : "bg-red-100 text-red-800 dark:bg-red-900/20 dark:text-red-400"
-                                  }`}
-                                >
-                                  {contract.status_label || (contract.status === 1 ? "Active" : "Inactive")}
-                                </span>
+                                <div className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                                  Service ID: {serviceId}
+                                </div>
+                                {service.invoiceDescription && (
+                                  <div className="text-sm text-gray-500 dark:text-gray-400 mt-1 truncate">
+                                    Invoice: {service.invoiceDescription}
+                                  </div>
+                                )}
+                                <div className="flex items-center space-x-4 mt-2 text-xs text-gray-500">
+                                  <span>
+                                    Price: ${Number.parseFloat(service.unitPrice || service.internalCurrencyUnitPrice || 0).toFixed(2)}
+                                  </span>
+                                  <span>
+                                    Cost: ${Number.parseFloat(service.unitCost || 0).toFixed(2)}
+                                  </span>
+                                  {service.internalCurrencyAdjustedPrice && (
+                                    <span>
+                                      Adjusted: ${Number.parseFloat(service.internalCurrencyAdjustedPrice).toFixed(2)}
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                              <div className="flex items-center space-x-2">
+                                {isSelected && (
+                                  <CheckCircle className="h-5 w-5 text-purple-600 flex-shrink-0" />
+                                )}
                               </div>
                             </div>
-                            {isContractSelected(contract.id) && (
-                              <Check className="h-5 w-5 text-blue-600 flex-shrink-0" />
-                            )}
-                          </div>
-                        </button>
-                      ))}
+                          </button>
+                        )
+                      })}
                     </div>
                   )}
                 </div>
               </div>
             </div>
 
-            {/* NEW: Contract Selection Results Panel */}
+            {/* NEW: Service Selection Results Panel */}
             <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-sm">
               <div className="p-4 border-b border-gray-200 dark:border-gray-700">
                 <div className="flex items-center justify-between">
                   <div>
-                    <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Contract Selections</h2>
+                    <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Service Selections</h2>
                     <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-                      Review and manage selections
+                      Review and manage selected services
                     </p>
                   </div>
                   {jsonOutput && (
@@ -657,48 +797,53 @@ function AutotaskContractMappingPage() {
               
               <div className="p-4">
                 <div className="space-y-3 max-h-64 overflow-y-auto mb-4">
-                  {Object.keys(selectedContractsByOrg).length === 0 ? (
+                  {getTotalSelectedServices() === 0 ? (
                     <p className="text-center text-gray-500 py-8 text-sm">
-                      No contracts selected yet
+                      No services selected yet
                     </p>
                   ) : (
-                    Object.entries(selectedContractsByOrg).map(([orgName, contractId]) => {
-                      const contract = contracts.find(c => c.id === contractId)
-                      if (!contract) return null
+                    Object.entries(selectedServices).map(([contractId, serviceIds]) => {
+                      const contractData = Object.values(selectedContracts).find(c => String(c.contractId) === contractId)
+                      const orgName = Object.keys(selectedContracts).find(org => selectedContracts[org].contractId === contractData?.contractId)
                       
-                      return (
-                        <div
-                          key={orgName}
-                          className="flex items-center justify-between p-2 bg-gray-50 dark:bg-gray-700 rounded-lg"
-                        >
-                          <div className="flex-1 min-w-0">
-                            <p className="text-sm font-medium text-gray-900 dark:text-white truncate">
-                              {orgName}
-                            </p>
-                            <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
-                              → {contract.contractName || "Unnamed Contract"}
-                            </p>
-                            <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
-                              {organizationMappings[orgName]?.replace(/\s*\(ID:\s*\d+\)\s*$/, "").trim()}
-                            </p>
-                          </div>
-                          <button
-                            onClick={() => clearContractMapping(orgName)}
-                            className="p-1 hover:bg-gray-200 dark:hover:bg-gray-600 rounded"
+                      return serviceIds.map(serviceId => {
+                        const service = (contractServices[contractId] || []).find(s => (s.serviceID || s.id) === serviceId)
+                        if (!service || !contractData) return null
+                        
+                        return (
+                          <div
+                            key={`${contractId}-${serviceId}`}
+                            className="flex items-center justify-between p-2 bg-gray-50 dark:bg-gray-700 rounded-lg"
                           >
-                            <X className="h-3 w-3 text-gray-400" />
-                          </button>
-                        </div>
-                      )
-                    })
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-medium text-gray-900 dark:text-white truncate">
+                                {getServiceNameById(serviceId)}
+                              </p>
+                              <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
+                                {contractData.contractName} → {orgName}
+                              </p>
+                              <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
+                                ${Number.parseFloat(service.unitPrice || service.internalCurrencyUnitPrice || 0).toFixed(2)}
+                              </p>
+                            </div>
+                            <button
+                              onClick={() => clearServiceSelection(contractId, serviceId)}
+                              className="p-1 hover:bg-gray-200 dark:hover:bg-gray-600 rounded"
+                            >
+                              <X className="h-3 w-3 text-gray-400" />
+                            </button>
+                          </div>
+                        )
+                      })
+                    }).filter(Boolean)
                   )}
                 </div>
                 
                 <div className="space-y-3">
                   <button
                     onClick={generateFinalConfiguration}
-                    disabled={Object.keys(selectedContractsByOrg).length === 0}
-                    className="w-full py-3 px-4 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed dark:disabled:bg-gray-600 text-white text-sm font-medium rounded-xl transition-colors duration-200"
+                    disabled={getTotalSelectedServices() === 0}
+                    className="w-full py-3 px-4 bg-purple-600 hover:bg-purple-700 disabled:bg-gray-300 disabled:cursor-not-allowed dark:disabled:bg-gray-600 text-white text-sm font-medium rounded-xl transition-colors duration-200"
                   >
                     Generate Final Configuration
                   </button>
@@ -708,7 +853,7 @@ function AutotaskContractMappingPage() {
                       onClick={handleNext}
                       className="w-full py-3 px-4 bg-green-600 hover:bg-green-700 text-white text-sm font-medium rounded-xl transition-all duration-200 shadow-sm hover:shadow-md"
                     >
-                      Next: Contract Services
+                      Complete Setup
                     </button>
                   )}
                 </div>
@@ -717,7 +862,7 @@ function AutotaskContractMappingPage() {
           </div>
 
           {/* Error Display */}
-          {error && contracts.length > 0 && (
+          {error && (
             <div className="mt-6 bg-red-50 border border-red-200 rounded-lg p-4">
               <div className="flex">
                 <AlertTriangle className="h-5 w-5 text-red-400 flex-shrink-0" />
@@ -741,7 +886,7 @@ function AutotaskContractMappingPage() {
               <div className="p-4 border-b border-gray-200 dark:border-gray-700">
                 <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Final Configuration</h3>
                 <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-                  Contract selections for {getSelectedContractsCount()} organizations
+                  Service selections: {getTotalSelectedServices()} services across {availableContracts.length} contracts
                 </p>
               </div>
               <div className="p-4">
@@ -757,4 +902,4 @@ function AutotaskContractMappingPage() {
   )
 }
 
-export default AutotaskContractMappingPage
+export default AutotaskContractServicesPage
