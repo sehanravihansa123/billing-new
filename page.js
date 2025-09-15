@@ -319,7 +319,7 @@ function AutotaskContractServicesPage() {
     URL.revokeObjectURL(url)
   }
 
-  // UPDATED: Complete handleNext function for NocoDB
+  // UPDATED: Complete handleNext function for NocoDB with fixed JSON parsing
   const handleNext = async () => {
     if (!isProcessingComplete) {
       setError("Please generate the configuration first")
@@ -490,8 +490,28 @@ function AutotaskContractServicesPage() {
             throw new Error(`Failed to send service ${serviceSelection.serviceName} (${response.status}): ${errorText}`)
           }
           
-          const result = await response.json()
-          console.log(`Service ${index + 1} sent successfully:`, result)
+          // FIXED: Handle empty or non-JSON responses
+          let result = null
+          try {
+            const responseText = await response.text()
+            console.log(`Service ${index + 1} raw response text:`, responseText)
+            
+            if (responseText && responseText.trim() !== '') {
+              try {
+                result = JSON.parse(responseText)
+                console.log(`Service ${index + 1} sent successfully:`, result)
+              } catch (parseError) {
+                console.log(`Service ${index + 1} response not valid JSON, but request succeeded`)
+                result = { success: true }
+              }
+            } else {
+              console.log(`Service ${index + 1} sent successfully (empty response)`)
+              result = { success: true }
+            }
+          } catch (textError) {
+            console.log(`Service ${index + 1} could not read response, but status was 200`)
+            result = { success: true }
+          }
           
           // Small delay between requests to avoid overwhelming the webhook
           if (index < finalConfig.serviceSelectionSummary.length - 1) {
