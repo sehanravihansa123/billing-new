@@ -32,15 +32,15 @@ function AutotaskContractMappingPage() {
   const [isProcessingComplete, setIsProcessingComplete] = useState(false)
   const [autotaskCompanies, setAutotaskCompanies] = useState([])
 
-  // Enhanced state for multi-service support
-  const [selectedOrganization, setSelectedOrganization] = useState(null)
+  // Enhanced state for multi-service support (similar to service mapping)
+  const [selectedOrgPlan, setSelectedOrgPlan] = useState(null) // { orgName, planName, displayName, key }
   const [searchTerm, setSearchTerm] = useState("")
   const [filteredContracts, setFilteredContracts] = useState([])
   const [showMappedOnly, setShowMappedOnly] = useState(false)
   
-  // NEW: Support for multiple services per organization (similar to service mapping)
+  // FIXED: Contract selection per organization/plan combination (like service mapping)
   const [organizationServices, setOrganizationServices] = useState({}) // { orgName: [service1, service2, ...] }
-  const [selectedContractsByOrg, setSelectedContractsByOrg] = useState({}) // { orgName: contractId }
+  const [selectedContractsByOrgPlan, setSelectedContractsByOrgPlan] = useState({}) // { "orgName|planName": contractId }
   const [expandedOrganizations, setExpandedOrganizations] = useState(new Set()) // Track which orgs are expanded
 
   useEffect(() => {
@@ -77,14 +77,14 @@ function AutotaskContractMappingPage() {
     console.log("=== END COMPONENT LOADING DEBUG ===")
   }, [router])
 
-  // Contract filtering remains the same
+  // Contract filtering - now works per organization/plan combination
   useEffect(() => {
-    if (!selectedOrganization) {
+    if (!selectedOrgPlan) {
       setFilteredContracts([])
       return
     }
 
-    const autotaskCompany = organizationMappings[selectedOrganization]
+    const autotaskCompany = organizationMappings[selectedOrgPlan.orgName]
 
     if (!autotaskCompany || autotaskCompany === "No Match Found") {
       setFilteredContracts([])
@@ -120,9 +120,9 @@ function AutotaskContractMappingPage() {
           )
 
     setFilteredContracts(filtered)
-  }, [selectedOrganization, searchTerm, contracts, organizationMappings, autotaskCompanies])
+  }, [selectedOrgPlan, searchTerm, contracts, organizationMappings, autotaskCompanies])
 
-  // NEW: Enhanced function to extract organizations AND their services (with duplicate handling)
+  // Enhanced function to extract organizations AND their services (with duplicate handling)
   const extractOrganizationsAndServices = (csvData, billingConfig) => {
     const lines = csvData.fullData.split("\n")
     const headers = lines[0].split(",").map((h) => h.trim())
@@ -215,19 +215,19 @@ function AutotaskContractMappingPage() {
     }
   }
 
-  // NEW: Check if organization has multiple services
+  // Check if organization has multiple services
   const hasMultipleServices = (orgName) => {
     return billingConfig?.planNameColumn && organizationServices[orgName] && organizationServices[orgName].length > 0
   }
 
-  // NEW: Get services for an organization
+  // Get services for an organization
   const getServicesForOrganization = (orgName) => {
     if (!hasMultipleServices(orgName)) return []
     return organizationServices[orgName] || []
   }
 
-  // NEW: Get organization combinations similar to service mapping page
-  const getOrganizationCombinations = () => {
+  // FIXED: Get organization/plan combinations similar to service mapping page
+  const getOrgPlanCombinations = () => {
     const combinations = []
     
     organizations.forEach(orgName => {
@@ -237,19 +237,17 @@ function AutotaskContractMappingPage() {
           services.forEach(serviceName => {
             combinations.push({
               orgName,
-              serviceName,
+              planName: serviceName,
               displayName: `${orgName} (${serviceName})`,
-              key: `${orgName}|${serviceName}`,
-              contractData: null // Will be set when contract is selected
+              key: `${orgName}|${serviceName}`
             })
           })
         } else {
           combinations.push({
             orgName,
-            serviceName: 'default',
+            planName: 'default',
             displayName: orgName,
-            key: orgName,
-            contractData: null
+            key: orgName
           })
         }
       }
@@ -264,38 +262,36 @@ function AutotaskContractMappingPage() {
       organizationMappings[org] && organizationMappings[org] !== "No Match Found"
     )
     
-    if (showMappedOnly) {
-      return mappedOrganizations.filter(org => {
-        return !selectedContractsByOrg[org]
-      })
-    }
-    
     return mappedOrganizations
   }
 
-  // SIMPLIFIED: Contract selection handler (one contract per organization)
-  const handleSelectContract = (contractId, orgName) => {
-    setSelectedContractsByOrg(prev => ({
+  // FIXED: Contract selection handler (one contract per organization/plan combination)
+  const handleSelectContract = (contractId, orgName, planName = 'default') => {
+    const key = `${orgName}|${planName}`
+    
+    setSelectedContractsByOrgPlan(prev => ({
       ...prev,
-      [orgName]: contractId
+      [key]: contractId
     }))
   }
 
-  // Check if contract is selected for organization
-  const isContractSelected = (contractId, orgName) => {
-    return selectedContractsByOrg[orgName] === contractId
+  // Check if contract is selected for organization/plan combination
+  const isContractSelected = (contractId, orgName, planName = 'default') => {
+    const key = `${orgName}|${planName}`
+    return selectedContractsByOrgPlan[key] === contractId
   }
 
-  // Clear contract mapping for organization
-  const clearContractMapping = (orgName) => {
-    setSelectedContractsByOrg(prev => {
+  // Clear contract mapping for organization/plan
+  const clearContractMapping = (orgName, planName = 'default') => {
+    const key = `${orgName}|${planName}`
+    setSelectedContractsByOrgPlan(prev => {
       const newMappings = { ...prev }
-      delete newMappings[orgName]
+      delete newMappings[key]
       return newMappings
     })
   }
 
-  // NEW: Toggle organization expansion
+  // Toggle organization expansion
   const toggleOrganizationExpansion = (orgName) => {
     setExpandedOrganizations(prev => {
       const newSet = new Set(prev)
@@ -310,25 +306,29 @@ function AutotaskContractMappingPage() {
 
   // Get total selected contracts count
   const getSelectedContractsCount = () => {
-    return Object.keys(selectedContractsByOrg).length
+    return Object.keys(selectedContractsByOrgPlan).length
   }
 
-  // Check if organization has contract selected
-  const isOrganizationMapped = (orgName) => {
-    return selectedContractsByOrg[orgName] !== undefined
+  // Check if organization/plan combination is mapped
+  const isOrgPlanMapped = (orgName, planName = 'default') => {
+    const key = `${orgName}|${planName}`
+    return selectedContractsByOrgPlan[key] !== undefined
   }
 
   // Enhanced configuration generation
   const generateFinalConfiguration = () => {
-    const mappedOrganizations = getFilteredOrganizations()
-    const unmappedOrganizations = mappedOrganizations.filter(org => !isOrganizationMapped(org))
+    const orgPlanCombinations = getOrgPlanCombinations()
+    const unmappedCombinations = orgPlanCombinations.filter(combo => 
+      !isOrgPlanMapped(combo.orgName, combo.planName)
+    )
     
-    if (unmappedOrganizations.length > 0) {
-      setError(`Please select contracts for: ${unmappedOrganizations.join(', ')}`)
+    if (unmappedCombinations.length > 0) {
+      const unmappedNames = unmappedCombinations.map(combo => combo.displayName)
+      setError(`Please select contracts for: ${unmappedNames.join(', ')}`)
       return
     }
     
-    if (mappedOrganizations.length === 0) {
+    if (orgPlanCombinations.length === 0) {
       setError("No mapped organizations found. Please go back and complete the company mapping step.")
       return
     }
@@ -346,7 +346,7 @@ function AutotaskContractMappingPage() {
       },
       summary: {
         totalOrganizations: organizations.length,
-        mappedOrganizations: mappedOrganizations.length,
+        mappedOrganizations: getFilteredOrganizations().length,
         selectedContracts: getSelectedContractsCount(),
         totalServices: Object.values(organizationServices).flat().length,
       },
@@ -354,7 +354,8 @@ function AutotaskContractMappingPage() {
     }
 
     // Build selected contracts mapping and summary
-    Object.entries(selectedContractsByOrg).forEach(([orgName, contractId]) => {
+    Object.entries(selectedContractsByOrgPlan).forEach(([key, contractId]) => {
+      const [orgName, planName] = key.split('|')
       const contract = contracts.find(c => c.id === contractId)
       const autotaskCompany = organizationMappings[orgName]
       
@@ -374,33 +375,17 @@ function AutotaskContractMappingPage() {
           startDate: contract.startDate,
           endDate: contract.endDate,
           status: contract.status,
+          serviceName: planName !== 'default' ? planName : null
         }
         
-        // For multi-service mode, create entries for each service
-        if (hasMultipleServices(orgName)) {
-          const services = getServicesForOrganization(orgName)
-          services.forEach(serviceName => {
-            const configKey = `${orgName}|${serviceName}`
-            finalConfiguration.selectedContracts[configKey] = {
-              ...contractData,
-              serviceName: serviceName
-            }
-            
-            finalConfiguration.contractSelectionSummary.push({
-              organizationName: orgName,
-              serviceName: serviceName,
-              ...contractData
-            })
-          })
-        } else {
-          finalConfiguration.selectedContracts[orgName] = contractData
-          
-          finalConfiguration.contractSelectionSummary.push({
-            organizationName: orgName,
-            serviceName: null,
-            ...contractData
-          })
-        }
+        // Use the key as is for the selected contracts
+        finalConfiguration.selectedContracts[key] = contractData
+        
+        finalConfiguration.contractSelectionSummary.push({
+          organizationName: orgName,
+          serviceName: planName !== 'default' ? planName : null,
+          ...contractData
+        })
       }
     })
 
@@ -442,6 +427,12 @@ function AutotaskContractMappingPage() {
     }
     
     router.push("/billing/vendor-settings/onboarding/autotask-contractservice-mapping")
+  }
+
+  // Handle organization/plan selection
+  const handleSelectOrgPlan = (combination) => {
+    setSelectedOrgPlan(combination)
+    setSearchTerm("")
   }
 
   if (loading) {
@@ -486,7 +477,7 @@ function AutotaskContractMappingPage() {
     )
   }
 
-  const organizationCombinations = getOrganizationCombinations()
+  const orgPlanCombinations = getOrgPlanCombinations()
 
   return (
     <DashboardLayout>
@@ -510,7 +501,7 @@ function AutotaskContractMappingPage() {
                     Organization Contracts
                   </h1>
                   <p className="text-sm text-gray-500 dark:text-gray-400 font-normal">
-                    Step 4: Select one contract per organization
+                    Step 4: Select contracts per organization {billingConfig?.planNameColumn && '& plan'}
                   </p>
                 </div>
               </div>
@@ -554,7 +545,7 @@ function AutotaskContractMappingPage() {
                   <div className="flex items-center space-x-2">
                     <Building className="h-5 w-5 text-blue-600" />
                     <span className="text-sm font-medium text-gray-900 dark:text-white">
-                      {getFilteredOrganizations().length} Organizations Available
+                      {orgPlanCombinations.length} Organization{orgPlanCombinations.length !== 1 ? 's' : ''}/Plan{orgPlanCombinations.length !== 1 ? 's' : ''}
                     </span>
                   </div>
                   {billingConfig?.planNameColumn && (
@@ -568,49 +559,35 @@ function AutotaskContractMappingPage() {
                   <div className="flex items-center space-x-2">
                     <FileText className="h-5 w-5 text-orange-600" />
                     <span className="text-sm font-medium text-gray-900 dark:text-white">
-                      {selectedOrganization ? filteredContracts.length : 0} Contracts Available
+                      {selectedOrgPlan ? filteredContracts.length : 0} Contracts Available
                     </span>
                   </div>
                   {getSelectedContractsCount() > 0 && (
                     <div className="flex items-center space-x-2">
                       <CheckCircle className="h-5 w-5 text-green-600" />
                       <span className="text-sm font-medium text-gray-900 dark:text-white">
-                        {getSelectedContractsCount()} Organizations Mapped
+                        {getSelectedContractsCount()} Contract{getSelectedContractsCount() !== 1 ? 's' : ''} Selected
                       </span>
                     </div>
                   )}
-                </div>
-
-                <div className="flex items-center space-x-2">
-                  <button
-                    onClick={() => setShowMappedOnly(!showMappedOnly)}
-                    className={`px-3 py-1 text-xs rounded-md transition-colors ${
-                      showMappedOnly
-                        ? "bg-blue-100 text-blue-800 dark:bg-blue-900/20 dark:text-blue-300"
-                        : "bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300"
-                    }`}
-                  >
-                    <Filter className="h-3 w-3 mr-1 inline" />
-                    {showMappedOnly ? "Show All" : "Unmapped Only"}
-                  </button>
                 </div>
               </div>
             </div>
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            {/* Organizations List with Grouped Display (similar to service mapping) */}
+            {/* Organizations/Plans List (similar to service mapping) */}
             <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-sm">
               <div className="p-4 border-b border-gray-200 dark:border-gray-700">
-                <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Organizations</h2>
+                <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Organizations & Plans</h2>
                 <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-                  {billingConfig?.planNameColumn ? 'Click to expand and select organization' : 'Click to select and view contracts'}
+                  {billingConfig?.planNameColumn ? 'Select each plan to choose contracts' : 'Select organizations to choose contracts'}
                 </p>
               </div>
 
               <div className="p-4">
                 <div className="space-y-2 max-h-96 overflow-y-auto">
-                  {getFilteredOrganizations().length === 0 ? (
+                  {orgPlanCombinations.length === 0 ? (
                     <div className="text-center py-8 text-gray-500">
                       <AlertTriangle className="h-8 w-8 mx-auto mb-2 text-red-400" />
                       <p className="text-sm font-medium">No Organizations Available</p>
@@ -620,89 +597,85 @@ function AutotaskContractMappingPage() {
                     </div>
                   ) : (
                     (() => {
-                      // Group organizations similar to service mapping page
+                      // Group combinations by organization
                       const orgGroups = {}
-                      getFilteredOrganizations().forEach(org => {
-                        orgGroups[org] = [{ orgName: org, services: getServicesForOrganization(org) }]
+                      orgPlanCombinations.forEach(combo => {
+                        if (!orgGroups[combo.orgName]) {
+                          orgGroups[combo.orgName] = []
+                        }
+                        orgGroups[combo.orgName].push(combo)
                       })
 
                       return Object.entries(orgGroups).map(([orgName, combinations]) => {
-                        const hasServices = hasMultipleServices(orgName)
-                        const isMapped = isOrganizationMapped(orgName)
-                        const isExpanded = expandedOrganizations.has(orgName)
-
+                        const hasMultiplePlans = combinations.length > 1
+                        
                         return (
                           <div key={orgName} className="space-y-1">
                             {/* Organization Header */}
                             <div className="flex items-center justify-between p-2 bg-gray-100 dark:bg-gray-700 rounded-md">
                               <span className="text-sm font-medium text-gray-900 dark:text-white">{orgName}</span>
                               <span className="text-xs text-gray-500 dark:text-gray-400">
-                                {hasServices ? `${getServicesForOrganization(orgName).length} services` : '1 organization'}
+                                {hasMultiplePlans ? `${combinations.length} plans` : '1 organization'}
                               </span>
                             </div>
                             
-                            {/* Organization Button */}
-                            <button
-                              onClick={() => {
-                                if (hasServices) {
-                                  toggleOrganizationExpansion(orgName)
-                                }
-                                setSelectedOrganization(orgName)
-                              }}
-                              className={`w-full text-left p-3 ml-4 rounded-lg transition-all ${
-                                selectedOrganization === orgName
-                                  ? "bg-blue-50 border-2 border-blue-200 dark:bg-blue-900/20 dark:border-blue-700"
-                                  : isMapped
-                                  ? "bg-green-50 border border-green-200 dark:bg-green-900/20 dark:border-green-700"
-                                  : "bg-gray-50 border border-gray-200 hover:bg-gray-100 dark:bg-gray-700 dark:border-gray-600 dark:hover:bg-gray-600"
-                              }`}
-                            >
-                              <div className="flex items-center justify-between">
-                                <div className="flex-1 min-w-0">
-                                  <p className="text-sm font-medium text-gray-900 dark:text-white truncate">{orgName}</p>
-                                  <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
-                                    → {organizationMappings[orgName]}
-                                  </p>
-                                  {hasServices && (
-                                    <p className="text-xs text-purple-600 dark:text-purple-400 truncate mt-1">
-                                      Will apply to {getServicesForOrganization(orgName).length} services
-                                    </p>
-                                  )}
-                                  {isMapped && (
-                                    <p className="text-xs text-green-600 dark:text-green-400 truncate mt-1">
-                                      ✓ Contract selected
-                                    </p>
-                                  )}
-                                </div>
-                                <div className="flex items-center space-x-1">
-                                  {hasServices && (
-                                    <ChevronRight className={`h-4 w-4 text-gray-400 transition-transform ${isExpanded ? 'rotate-90' : ''}`} />
-                                  )}
-                                  {isMapped ? (
-                                    <CheckCircle className="h-4 w-4 text-green-500" />
-                                  ) : (
-                                    <Check className="h-4 w-4 text-gray-400" />
-                                  )}
-                                </div>
-                              </div>
-                            </button>
-
-                            {/* Service List for Multi-Service Organizations */}
-                            {hasServices && isExpanded && (
-                              <div className="ml-8 space-y-1">
-                                {getServicesForOrganization(orgName).map((service) => (
-                                  <div
-                                    key={service}
-                                    className="p-2 bg-purple-50 dark:bg-purple-900/20 rounded-md text-xs text-purple-600 dark:text-purple-400 border border-purple-200 dark:border-purple-700"
-                                  >
-                                    <div className="flex items-center justify-between">
-                                      <span>{service}</span>
-                                      <span className="text-purple-500">Service will use selected contract</span>
+                            {/* Plan/Service Combinations */}
+                            {combinations.map((combination) => {
+                              const isMapped = isOrgPlanMapped(combination.orgName, combination.planName)
+                              
+                              return (
+                                <button
+                                  key={combination.key}
+                                  onClick={() => handleSelectOrgPlan(combination)}
+                                  className={`w-full text-left p-3 ml-4 rounded-lg transition-all ${
+                                    selectedOrgPlan?.key === combination.key
+                                      ? "bg-blue-50 border-2 border-blue-200 dark:bg-blue-900/20 dark:border-blue-700"
+                                      : isMapped
+                                      ? "bg-green-50 border border-green-200 dark:bg-green-900/20 dark:border-green-700"
+                                      : "bg-gray-50 border border-gray-200 hover:bg-gray-100 dark:bg-gray-700 dark:border-gray-600 dark:hover:bg-gray-600"
+                                  }`}
+                                >
+                                  <div className="flex items-center justify-between">
+                                    <div className="flex-1 min-w-0">
+                                      {hasMultiplePlans ? (
+                                        <>
+                                          <p className="text-sm font-medium text-purple-600 dark:text-purple-400 truncate">
+                                            {combination.planName}
+                                          </p>
+                                          <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
+                                            Plan/Service Type
+                                          </p>
+                                        </>
+                                      ) : (
+                                        <>
+                                          <p className="text-sm font-medium text-gray-900 dark:text-white truncate">
+                                            {combination.displayName}
+                                          </p>
+                                          <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
+                                            Organization
+                                          </p>
+                                        </>
+                                      )}
+                                      <p className="text-xs text-gray-400 dark:text-gray-500 truncate">
+                                        → {organizationMappings[combination.orgName]}
+                                      </p>
+                                      <p className="text-xs mt-1">
+                                        <span className={isMapped ? "text-green-600 dark:text-green-400" : "text-gray-500"}>
+                                          {isMapped ? "✓ Contract selected" : "Select contract"}
+                                        </span>
+                                      </p>
+                                    </div>
+                                    <div className="flex items-center space-x-1">
+                                      {isMapped ? (
+                                        <CheckCircle className="h-4 w-4 text-green-500" />
+                                      ) : (
+                                        <Check className="h-4 w-4 text-gray-400" />
+                                      )}
                                     </div>
                                   </div>
-                                ))}
-                              </div>
-                            )}
+                                </button>
+                              )
+                            })}
                           </div>
                         )
                       })
@@ -718,20 +691,22 @@ function AutotaskContractMappingPage() {
                 <div className="flex items-center justify-between">
                   <div>
                     <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
-                      {selectedOrganization ? `Contracts for ${selectedOrganization}` : "Contracts"}
+                      {selectedOrgPlan ? 
+                        (selectedOrgPlan.planName !== 'default' ? 
+                          `Contracts for ${selectedOrgPlan.orgName} - ${selectedOrgPlan.planName}` :
+                          `Contracts for ${selectedOrgPlan.orgName}`
+                        ) : "Contracts"}
                     </h2>
                     <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-                      {selectedOrganization
-                        ? hasMultipleServices(selectedOrganization) 
-                          ? `Select one contract - it will apply to all ${getServicesForOrganization(selectedOrganization).length} services`
-                          : `Select one contract for this organization`
-                        : "Select an organization to view its contracts"}
+                      {selectedOrgPlan
+                        ? `Select ONE contract for this ${selectedOrgPlan.planName !== 'default' ? 'plan' : 'organization'}`
+                        : "Select an organization/plan to view available contracts"}
                     </p>
                   </div>
                 </div>
 
                 {/* Search */}
-                {selectedOrganization && (
+                {selectedOrgPlan && (
                   <div className="mt-3 relative">
                     <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
                     <input
@@ -747,10 +722,10 @@ function AutotaskContractMappingPage() {
 
               <div className="p-4">
                 <div className="max-h-96 overflow-y-auto">
-                  {!selectedOrganization ? (
+                  {!selectedOrgPlan ? (
                     <div className="text-center py-12 text-gray-500">
                       <Building className="h-12 w-12 mx-auto mb-3 text-gray-300" />
-                      <p>Select an organization to view its contracts</p>
+                      <p>Select an organization/plan to view its contracts</p>
                     </div>
                   ) : filteredContracts.length === 0 ? (
                     <div className="text-center py-8 text-gray-500">
@@ -761,17 +736,17 @@ function AutotaskContractMappingPage() {
                     </div>
                   ) : (
                     <div className="space-y-2">
-                      {/* Show organization context if it has multiple services */}
-                      {hasMultipleServices(selectedOrganization) && (
-                        <div className="p-3 bg-purple-50 dark:bg-purple-900/20 rounded-lg border border-purple-200 dark:border-purple-700 mb-4">
+                      {/* Show plan context if applicable */}
+                      {selectedOrgPlan.planName !== 'default' && (
+                        <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-700 mb-4">
                           <div className="flex items-center space-x-2">
-                            <Package className="h-4 w-4 text-purple-600" />
-                            <span className="text-sm font-medium text-purple-800 dark:text-purple-300">
-                              Multi-Service Organization: {selectedOrganization}
+                            <Package className="h-4 w-4 text-blue-600" />
+                            <span className="text-sm font-medium text-blue-800 dark:text-blue-300">
+                              Selecting contract for: {selectedOrgPlan.orgName} → {selectedOrgPlan.planName}
                             </span>
                           </div>
-                          <p className="text-xs text-purple-600 dark:text-purple-400 mt-1">
-                            The selected contract will apply to all {getServicesForOrganization(selectedOrganization).length} services: {getServicesForOrganization(selectedOrganization).join(', ')}
+                          <p className="text-xs text-blue-600 dark:text-blue-400 mt-1">
+                            This contract will be used for the "{selectedOrgPlan.planName}" plan from your CSV
                           </p>
                         </div>
                       )}
@@ -779,9 +754,9 @@ function AutotaskContractMappingPage() {
                       {filteredContracts.map((contract, index) => (
                         <button
                           key={contract.id || index}
-                          onClick={() => handleSelectContract(contract.id, selectedOrganization)}
+                          onClick={() => handleSelectContract(contract.id, selectedOrgPlan.orgName, selectedOrgPlan.planName)}
                           className={`w-full text-left p-3 rounded-lg border transition-all ${
-                            isContractSelected(contract.id, selectedOrganization)
+                            isContractSelected(contract.id, selectedOrgPlan.orgName, selectedOrgPlan.planName)
                               ? "bg-blue-50 border-2 border-blue-200 dark:bg-blue-900/20 dark:border-blue-700"
                               : "border-gray-200 hover:border-blue-300 hover:bg-blue-50 dark:border-gray-600 dark:hover:border-blue-500 dark:hover:bg-blue-900/20"
                           }`}
@@ -816,7 +791,7 @@ function AutotaskContractMappingPage() {
                                 </span>
                               </div>
                             </div>
-                            {isContractSelected(contract.id, selectedOrganization) && (
+                            {isContractSelected(contract.id, selectedOrgPlan.orgName, selectedOrgPlan.planName) && (
                               <Check className="h-5 w-5 text-blue-600 flex-shrink-0" />
                             )}
                           </div>
@@ -835,7 +810,7 @@ function AutotaskContractMappingPage() {
                   <div>
                     <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Contract Selections</h2>
                     <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-                      Review and manage selections
+                      One contract per organization/plan
                     </p>
                   </div>
                   {jsonOutput && (
@@ -852,38 +827,34 @@ function AutotaskContractMappingPage() {
               
               <div className="p-4">
                 <div className="space-y-3 max-h-64 overflow-y-auto mb-4">
-                  {Object.keys(selectedContractsByOrg).length === 0 ? (
+                  {Object.keys(selectedContractsByOrgPlan).length === 0 ? (
                     <p className="text-center text-gray-500 py-8 text-sm">
                       No contracts selected yet
                     </p>
                   ) : (
-                    Object.entries(selectedContractsByOrg).map(([orgName, contractId]) => {
+                    Object.entries(selectedContractsByOrgPlan).map(([key, contractId]) => {
+                      const [orgName, planName] = key.split('|')
                       const contract = contracts.find(c => c.id === contractId)
                       if (!contract) return null
                       
                       return (
                         <div
-                          key={orgName}
+                          key={key}
                           className="flex items-center justify-between p-2 bg-gray-50 dark:bg-gray-700 rounded-lg"
                         >
                           <div className="flex-1 min-w-0">
                             <p className="text-sm font-medium text-gray-900 dark:text-white truncate">
-                              {orgName}
+                              {planName !== 'default' ? `${orgName} (${planName})` : orgName}
                             </p>
-                            {hasMultipleServices(orgName) && (
-                              <p className="text-xs text-purple-600 dark:text-purple-400 truncate">
-                                Services: {getServicesForOrganization(orgName).join(', ')}
-                              </p>
-                            )}
-                            <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
-                              → {contract.contractName || "Unnamed Contract"}
+                            <p className="text-xs text-blue-600 dark:text-blue-400 truncate">
+                              Contract: {contract.contractName || "Unnamed Contract"}
                             </p>
                             <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
                               {organizationMappings[orgName]?.replace(/\s*\(ID:\s*\d+\)\s*$/, "").trim()}
                             </p>
                           </div>
                           <button
-                            onClick={() => clearContractMapping(orgName)}
+                            onClick={() => clearContractMapping(orgName, planName)}
                             className="p-1 hover:bg-gray-200 dark:hover:bg-gray-600 rounded"
                           >
                             <X className="h-3 w-3 text-gray-400" />
@@ -897,7 +868,7 @@ function AutotaskContractMappingPage() {
                 <div className="space-y-3">
                   <button
                     onClick={generateFinalConfiguration}
-                    disabled={Object.keys(selectedContractsByOrg).length === 0}
+                    disabled={Object.keys(selectedContractsByOrgPlan).length === 0}
                     className="w-full py-3 px-4 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed dark:disabled:bg-gray-600 text-white text-sm font-medium rounded-xl transition-colors duration-200"
                   >
                     Generate Final Configuration
@@ -941,7 +912,7 @@ function AutotaskContractMappingPage() {
               <div className="p-4 border-b border-gray-200 dark:border-gray-700">
                 <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Final Configuration</h3>
                 <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-                  Contract selections for {getSelectedContractsCount()} organization{getSelectedContractsCount() !== 1 ? 's' : ''}
+                  Contract selections for {getSelectedContractsCount()} organization{getSelectedContractsCount() !== 1 ? 's' : ''}/plan{getSelectedContractsCount() !== 1 ? 's' : ''}
                 </p>
               </div>
               <div className="p-4">
