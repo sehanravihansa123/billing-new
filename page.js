@@ -198,10 +198,11 @@ function AutotaskContractServicesPage() {
         return newSelection
       } else {
         // Select new service (replacing any previous selection)
-        return {
+        const newSelection = {
           ...prev,
           [key]: serviceId
         }
+        return newSelection
       }
     })
   }
@@ -255,7 +256,7 @@ function AutotaskContractServicesPage() {
     return combinations
   }
 
-  // Generate final configuration with single service selections
+  // FIXED: Generate final configuration with single service selections
   const generateFinalConfiguration = () => {
     const orgServiceCombinations = getOrgServiceCombinations()
     const unselectedCombinations = orgServiceCombinations.filter(combo => {
@@ -283,39 +284,90 @@ function AutotaskContractServicesPage() {
       timestamp: new Date().toISOString(),
     }
 
-    // Build detailed service selection summary
+    // Build detailed service selection summary - FIXED: Proper iteration and validation
     Object.entries(selectedServicesByOrgPlan).forEach(([key, serviceId]) => {
       const [orgName, planName] = key.split('|')
       
-      // Find the corresponding contract data
-      const contractKey = planName !== 'default' ? `${orgName}|${planName}` : orgName
-      const contractData = selectedContracts[contractKey]
+      // FIXED: Try multiple contract key formats to match what was stored
+      const possibleContractKeys = [
+        key, // Full key "orgName|planName"
+        orgName, // Just org name
+        planName !== 'default' ? `${orgName}|${planName}` : orgName // Conditional key
+      ]
+      
+      let contractData = null
+      let contractKey = null
+      
+      // Find the contract data using any of the possible keys
+      for (const testKey of possibleContractKeys) {
+        if (selectedContracts[testKey]) {
+          contractData = selectedContracts[testKey]
+          contractKey = testKey
+          break
+        }
+      }
+      
+      console.log(`Trying contract keys for ${key}:`, possibleContractKeys)
+      console.log(`Found contract with key: ${contractKey}`)
+      console.log('Found contract data:', contractData)
       
       if (!contractData) {
-        console.warn(`Contract data not found for key: ${contractKey}`)
+        console.warn(`Contract data not found for selection key: ${key}`)
+        console.log('Available contract keys:', Object.keys(selectedContracts))
         return
       }
 
       const contractId = String(contractData.contractId)
       const allContractServices = contractServices[contractId] || []
-      const service = allContractServices.find(s => (s.serviceID || s.id) === serviceId)
+      
+      // FIXED: Find service by both serviceID and id fields
+      const service = allContractServices.find(s => {
+        const sId = s.serviceID || s.id
+        return sId === serviceId
+      })
       
       if (service) {
+        const serviceIdToUse = service.serviceID || service.id
+        const serviceName = getServiceNameById(serviceIdToUse)
+        
         finalConfig.serviceSelectionSummary.push({
           contractId: contractId,
           contractName: contractData.contractName,
           organizationName: orgName,
           planName: planName !== 'default' ? planName : null,
-          serviceId: service.serviceID || service.id,
-          serviceName: getServiceNameById(service.serviceID || service.id),
+          serviceId: serviceIdToUse,
+          serviceName: serviceName,
           unitPrice: service.unitPrice || service.internalCurrencyUnitPrice || 0,
           unitCost: service.unitCost || 0,
           adjustedPrice: service.internalCurrencyAdjustedPrice || 0,
           invoiceDescription: service.invoiceDescription,
           internalDescription: service.internalDescription
         })
+        
+        console.log(`Added service to summary:`, {
+          orgName,
+          planName,
+          serviceId: serviceIdToUse,
+          serviceName
+        })
+      } else {
+        console.error(`Service not found for serviceId: ${serviceId} in contract ${contractId}`)
+        console.log(`Available services in contract:`, allContractServices.map(s => ({ 
+          id: s.id, 
+          serviceID: s.serviceID,
+          name: getServiceNameById(s.serviceID || s.id)
+        })))
       }
     })
+
+    console.log(`Final serviceSelectionSummary length: ${finalConfig.serviceSelectionSummary.length}`)
+    console.log(`Selected services count: ${getTotalSelectedServices()}`)
+    
+    // FIXED: Additional validation before completing
+    if (finalConfig.serviceSelectionSummary.length === 0) {
+      setError("No valid services were found for the selected items. Please check your selections and try again.")
+      return
+    }
 
     const output = JSON.stringify(finalConfig, null, 2)
     setJsonOutput(output)
@@ -342,7 +394,7 @@ function AutotaskContractServicesPage() {
     URL.revokeObjectURL(url)
   }
 
-  // Handle data sending with single service per org/plan
+  // FIXED: Handle data sending with proper validation
   const handleNext = async () => {
     if (!isProcessingComplete) {
       setError("Please generate the configuration first")
@@ -363,155 +415,155 @@ function AutotaskContractServicesPage() {
       const finalConfig = JSON.parse(jsonOutput)
       
       console.log('Starting to send individual service records to NocoDB...')
+      console.log('Final config serviceSelectionSummary:', finalConfig.serviceSelectionSummary)
       console.log('Total services to process:', finalConfig.serviceSelectionSummary?.length || 0)
       
-      if (finalConfig.serviceSelectionSummary && finalConfig.serviceSelectionSummary.length > 0) {
+      // FIXED: Better validation of serviceSelectionSummary
+      if (!finalConfig.serviceSelectionSummary || !Array.isArray(finalConfig.serviceSelectionSummary) || finalConfig.serviceSelectionSummary.length === 0) {
+        throw new Error('No services selected to send. Please select services and generate the configuration again.')
+      }
+      
+      for (const [index, serviceSelection] of finalConfig.serviceSelectionSummary.entries()) {
+        console.log(`Processing service ${index + 1}/${finalConfig.serviceSelectionSummary.length}:`, serviceSelection.serviceName)
         
-        for (const [index, serviceSelection] of finalConfig.serviceSelectionSummary.entries()) {
-          console.log(`Processing service ${index + 1}/${finalConfig.serviceSelectionSummary.length}:`, serviceSelection.serviceName)
-          
-          const contractData = selectedContracts[serviceSelection.planName ? 
-            `${serviceSelection.organizationName}|${serviceSelection.planName}` : 
-            serviceSelection.organizationName
-          ]
-          
-          const contractServicesData = contractServices[String(serviceSelection.contractId)] || []
-          const serviceData = contractServicesData.find(s => 
-            (s.serviceID || s.id) === serviceSelection.serviceId
-          )
-          
-          if (!contractData) {
-            console.warn(`Contract data not found for service ${serviceSelection.serviceName}`)
-            continue
-          }
-          
-          if (!serviceData) {
-            console.warn(`Service data not found for service ID ${serviceSelection.serviceId}`)
-            continue
-          }
-          
-          let csvCompanyName = ''
-          let csvPlanValue = ''
-          
-          if (orgMappings && csvData) {
-            const csvOrgEntry = Object.entries(orgMappings).find(([csvOrg, autotaskCompany]) => {
-              const cleanAutotaskCompany = autotaskCompany?.replace(/\s*\(ID:\s*\d+\)\s*$/, "").trim()
-              const contractAutotaskCompany = contractData.autotaskCompany?.replace(/\s*\(ID:\s*\d+\)\s*$/, "").trim()
-              return cleanAutotaskCompany === contractAutotaskCompany
-            })
-            
-            if (csvOrgEntry) {
-              csvCompanyName = csvOrgEntry[0]
-              
-              const lines = csvData.fullData.split('\n')
-              const headers = lines[0].split(',').map(h => h.trim())
-              const rows = lines.slice(1).filter(line => line.trim())
-              
-              const orgColumnIndex = headers.indexOf(billingConfig?.organizationColumn)
-              const planColumnIndex = headers.indexOf(billingConfig?.planNameColumn)
-              
-              if (orgColumnIndex >= 0) {
-                // For multi-service mode, find the row that matches both org and plan
-                const matchingRow = rows.find(row => {
-                  const cells = row.split(',').map(cell => cell.trim())
-                  const rowOrg = cells[orgColumnIndex]
-                  const rowPlan = planColumnIndex >= 0 ? cells[planColumnIndex] : null
-                  
-                  if (serviceSelection.planName && rowPlan) {
-                    return rowOrg === csvCompanyName && rowPlan === serviceSelection.planName
-                  } else {
-                    return rowOrg === csvCompanyName
-                  }
-                })
-                
-                if (matchingRow) {
-                  const cells = matchingRow.split(',').map(cell => cell.trim())
-                  if (planColumnIndex >= 0 && cells[planColumnIndex]) {
-                    csvPlanValue = cells[planColumnIndex]
-                  }
-                }
-              }
-            } else {
-              csvCompanyName = serviceSelection.organizationName || ''
-            }
-          }
-          
-          const nocoDbData = {
-            mapid: `${serviceSelection.contractId}-${serviceSelection.serviceId}-${Date.now()}`,
-            service_name: billingConfig?.serviceName || '',
-            autotask_service_name: serviceSelection.serviceName || '',
-            service_id: serviceSelection.serviceId || '',
-            contract_name: contractData.contractName || '',
-            contract_id: contractData.contractId || '',
-            contract_service_id: serviceData.id || serviceData.serviceID || '',
-            organization_name: contractData.autotaskCompany?.replace(/\s*\(ID:\s*\d+\)\s*$/, "").trim() || contractData.autotaskCompany || '',
-            customer_id: contractData.autotaskCompanyId || '',
-            csv_company_name: csvCompanyName,
-            plan_name: billingConfig?.planNameColumn || '',
-            csv_filename: csvData?.filename || "uploaded_csv",
-            plan_column: billingConfig?.planNameColumn || '',
-            org_column: billingConfig?.organizationColumn || '',
-            user_count_column: billingConfig?.userCountColumn || '',
-            csv_plan_value: csvPlanValue,
-            form_id: new Date().toISOString(),
-            unit_price: serviceSelection.unitPrice || 0,
-            unit_cost: serviceSelection.unitCost || 0,
-            adjusted_price: serviceSelection.adjustedPrice || 0,
-            invoice_description: serviceSelection.invoiceDescription || '',
-            internal_description: serviceSelection.internalDescription || ''
-          }
-          
-          console.log(`Sending service ${index + 1} to NocoDB:`, nocoDbData)
-          
-          const response = await fetch('https://n8n-oitlabs.eastus.cloudapp.azure.com/webhook/senddata', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify(nocoDbData)
+        const contractData = selectedContracts[serviceSelection.planName ? 
+          `${serviceSelection.organizationName}|${serviceSelection.planName}` : 
+          serviceSelection.organizationName
+        ]
+        
+        const contractServicesData = contractServices[String(serviceSelection.contractId)] || []
+        const serviceData = contractServicesData.find(s => 
+          (s.serviceID || s.id) === serviceSelection.serviceId
+        )
+        
+        if (!contractData) {
+          console.warn(`Contract data not found for service ${serviceSelection.serviceName}`)
+          continue
+        }
+        
+        if (!serviceData) {
+          console.warn(`Service data not found for service ID ${serviceSelection.serviceId}`)
+          continue
+        }
+        
+        let csvCompanyName = ''
+        let csvPlanValue = ''
+        
+        if (orgMappings && csvData) {
+          const csvOrgEntry = Object.entries(orgMappings).find(([csvOrg, autotaskCompany]) => {
+            const cleanAutotaskCompany = autotaskCompany?.replace(/\s*\(ID:\s*\d+\)\s*$/, "").trim()
+            const contractAutotaskCompany = contractData.autotaskCompany?.replace(/\s*\(ID:\s*\d+\)\s*$/, "").trim()
+            return cleanAutotaskCompany === contractAutotaskCompany
           })
           
-          console.log(`Service ${index + 1} response status:`, response.status)
-          
-          if (!response.ok) {
-            const errorText = await response.text()
-            console.error(`Error sending service ${index + 1}:`, errorText)
-            throw new Error(`Failed to send service ${serviceSelection.serviceName} (${response.status}): ${errorText}`)
-          }
-          
-          let result = null
-          try {
-            const responseText = await response.text()
-            console.log(`Service ${index + 1} raw response text:`, responseText)
+          if (csvOrgEntry) {
+            csvCompanyName = csvOrgEntry[0]
             
-            if (responseText && responseText.trim() !== '') {
-              try {
-                result = JSON.parse(responseText)
-                console.log(`Service ${index + 1} sent successfully:`, result)
-              } catch (parseError) {
-                console.log(`Service ${index + 1} response not valid JSON, but request succeeded`)
-                result = { success: true }
+            const lines = csvData.fullData.split('\n')
+            const headers = lines[0].split(',').map(h => h.trim())
+            const rows = lines.slice(1).filter(line => line.trim())
+            
+            const orgColumnIndex = headers.indexOf(billingConfig?.organizationColumn)
+            const planColumnIndex = headers.indexOf(billingConfig?.planNameColumn)
+            
+            if (orgColumnIndex >= 0) {
+              // For multi-service mode, find the row that matches both org and plan
+              const matchingRow = rows.find(row => {
+                const cells = row.split(',').map(cell => cell.trim())
+                const rowOrg = cells[orgColumnIndex]
+                const rowPlan = planColumnIndex >= 0 ? cells[planColumnIndex] : null
+                
+                if (serviceSelection.planName && rowPlan) {
+                  return rowOrg === csvCompanyName && rowPlan === serviceSelection.planName
+                } else {
+                  return rowOrg === csvCompanyName
+                }
+              })
+              
+              if (matchingRow) {
+                const cells = matchingRow.split(',').map(cell => cell.trim())
+                if (planColumnIndex >= 0 && cells[planColumnIndex]) {
+                  csvPlanValue = cells[planColumnIndex]
+                }
               }
-            } else {
-              console.log(`Service ${index + 1} sent successfully (empty response)`)
-              result = { success: true }
             }
-          } catch (textError) {
-            console.log(`Service ${index + 1} could not read response, but status was 200`)
-            result = { success: true }
-          }
-          
-          if (index < finalConfig.serviceSelectionSummary.length - 1) {
-            await new Promise(resolve => setTimeout(resolve, 100))
+          } else {
+            csvCompanyName = serviceSelection.organizationName || ''
           }
         }
         
-        console.log('All services sent successfully!')
-        router.push("/billing/vendor-settings/overview")
+        const nocoDbData = {
+          mapid: `${serviceSelection.contractId}-${serviceSelection.serviceId}-${Date.now()}`,
+          service_name: billingConfig?.serviceName || '',
+          autotask_service_name: serviceSelection.serviceName || '',
+          service_id: serviceSelection.serviceId || '',
+          contract_name: contractData.contractName || '',
+          contract_id: contractData.contractId || '',
+          contract_service_id: serviceData.id || serviceData.serviceID || '',
+          organization_name: contractData.autotaskCompany?.replace(/\s*\(ID:\s*\d+\)\s*$/, "").trim() || contractData.autotaskCompany || '',
+          customer_id: contractData.autotaskCompanyId || '',
+          csv_company_name: csvCompanyName,
+          plan_name: billingConfig?.planNameColumn || '',
+          csv_filename: csvData?.filename || "uploaded_csv",
+          plan_column: billingConfig?.planNameColumn || '',
+          org_column: billingConfig?.organizationColumn || '',
+          user_count_column: billingConfig?.userCountColumn || '',
+          csv_plan_value: csvPlanValue,
+          form_id: new Date().toISOString(),
+          unit_price: serviceSelection.unitPrice || 0,
+          unit_cost: serviceSelection.unitCost || 0,
+          adjusted_price: serviceSelection.adjustedPrice || 0,
+          invoice_description: serviceSelection.invoiceDescription || '',
+          internal_description: serviceSelection.internalDescription || ''
+        }
         
-      } else {
-        throw new Error('No services selected to send')
+        console.log(`Sending service ${index + 1} to NocoDB:`, nocoDbData)
+        
+        const response = await fetch('https://n8n-oitlabs.eastus.cloudapp.azure.com/webhook/senddata', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(nocoDbData)
+        })
+        
+        console.log(`Service ${index + 1} response status:`, response.status)
+        
+        if (!response.ok) {
+          const errorText = await response.text()
+          console.error(`Error sending service ${index + 1}:`, errorText)
+          throw new Error(`Failed to send service ${serviceSelection.serviceName} (${response.status}): ${errorText}`)
+        }
+        
+        let result = null
+        try {
+          const responseText = await response.text()
+          console.log(`Service ${index + 1} raw response text:`, responseText)
+          
+          if (responseText && responseText.trim() !== '') {
+            try {
+              result = JSON.parse(responseText)
+              console.log(`Service ${index + 1} sent successfully:`, result)
+            } catch (parseError) {
+              console.log(`Service ${index + 1} response not valid JSON, but request succeeded`)
+              result = { success: true }
+            }
+          } else {
+            console.log(`Service ${index + 1} sent successfully (empty response)`)
+            result = { success: true }
+          }
+        } catch (textError) {
+          console.log(`Service ${index + 1} could not read response, but status was 200`)
+          result = { success: true }
+        }
+        
+        if (index < finalConfig.serviceSelectionSummary.length - 1) {
+          await new Promise(resolve => setTimeout(resolve, 100))
+        }
       }
+      
+      console.log('All services sent successfully!')
+      router.push("/billing/vendor-settings/overview")
       
     } catch (error) {
       console.error('Error sending data to webhook:', error)
@@ -572,7 +624,7 @@ function AutotaskContractServicesPage() {
     const services = contractServices[contractId] || []
 
     const servicesWithNames = services.map((contractService) => {
-      const serviceId = contractService.serviceID
+      const serviceId = contractService.serviceID || contractService.id // FIXED: Handle both fields
       const serviceName = getServiceNameById(serviceId)
       
       return {
@@ -593,7 +645,7 @@ function AutotaskContractServicesPage() {
             serviceName.includes(searchLower) ||
             invoiceDesc.includes(searchLower) ||
             internalDesc.includes(searchLower) ||
-            String(service.serviceID || "").includes(searchLower)
+            String(service.serviceID || service.id || "").includes(searchLower)
           )
         })
 
@@ -1026,46 +1078,69 @@ function AutotaskContractServicesPage() {
                       No services selected yet
                     </p>
                   ) : (
-                    Object.entries(selectedServicesByOrgPlan).map(([key, serviceId]) => {
-                      const [orgName, planName] = key.split('|')
-                      const contractKey = planName !== 'default' ? `${orgName}|${planName}` : orgName
-                      const contractData = selectedContracts[contractKey]
-                      
-                      if (!contractData) return null
-                      
-                      const contractServicesData = contractServices[String(contractData.contractId)] || []
-                      const service = contractServicesData.find(s => (s.serviceID || s.id) === serviceId)
-                      
-                      if (!service) return null
-                      
-                      return (
-                        <div
-                          key={key}
-                          className="flex items-center justify-between p-2 bg-gray-50 dark:bg-gray-700 rounded-lg"
-                        >
-                          <div className="flex-1 min-w-0">
-                            <p className="text-sm font-medium text-gray-900 dark:text-white truncate">
-                              {planName !== 'default' ? `${orgName} (${planName})` : orgName}
-                            </p>
-                            <p className="text-xs text-purple-600 dark:text-purple-400 truncate">
-                              Service: {getServiceNameById(serviceId)}
-                            </p>
-                            <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
-                              Contract: {contractData.contractName || "Unnamed Contract"}
-                            </p>
-                            <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
-                              ${Number.parseFloat(service.unitPrice || service.internalCurrencyUnitPrice || 0).toFixed(2)}
-                            </p>
-                          </div>
-                          <button
-                            onClick={() => clearServiceSelection(orgName, planName)}
-                            className="p-1 hover:bg-gray-200 dark:hover:bg-gray-600 rounded"
+                    (() => {
+                      return Object.entries(selectedServicesByOrgPlan).map(([key, serviceId]) => {
+                        const [orgName, planName] = key.split('|')
+                        
+                        // FIXED: Try multiple contract key formats to match what was stored
+                        const possibleContractKeys = [
+                          key, // Full key "orgName|planName"
+                          orgName, // Just org name
+                          planName !== 'default' ? `${orgName}|${planName}` : orgName // Conditional key
+                        ]
+                        
+                        let contractData = null
+                        let contractKey = null
+                        
+                        // Find the contract data using any of the possible keys
+                        for (const testKey of possibleContractKeys) {
+                          if (selectedContracts[testKey]) {
+                            contractData = selectedContracts[testKey]
+                            contractKey = testKey
+                            break
+                          }
+                        }
+                        
+                        if (!contractData) {
+                          return null
+                        }
+                        
+                        const contractServicesData = contractServices[String(contractData.contractId)] || []
+                        const service = contractServicesData.find(s => (s.serviceID || s.id) === serviceId)
+                        
+                        if (!service) {
+                          return null
+                        }
+                        
+                        return (
+                          <div
+                            key={key}
+                            className="flex items-center justify-between p-2 bg-gray-50 dark:bg-gray-700 rounded-lg"
                           >
-                            <X className="h-3 w-3 text-gray-400" />
-                          </button>
-                        </div>
-                      )
-                    }).filter(Boolean)
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-medium text-gray-900 dark:text-white truncate">
+                                {planName !== 'default' ? `${orgName} (${planName})` : orgName}
+                              </p>
+                              <p className="text-xs text-purple-600 dark:text-purple-400 truncate">
+                                Service: {getServiceNameById(serviceId)}
+                              </p>
+                              <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
+                                Contract: {contractData.contractName || "Unnamed Contract"}
+                              </p>
+                              <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
+                                ${Number.parseFloat(service.unitPrice || service.internalCurrencyUnitPrice || 0).toFixed(2)}
+                              </p>
+                            </div>
+                            <button
+                              onClick={() => clearServiceSelection(orgName, planName)}
+                              className="p-1 hover:bg-gray-200 dark:hover:bg-gray-600 rounded"
+                            >
+                              <X className="h-3 w-3 text-gray-400" />
+                            </button>
+                          </div>
+                        )
+                      }).filter(Boolean)
+                    })()
                   )}
                 </div>
                 
