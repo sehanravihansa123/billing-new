@@ -1,783 +1,490 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import {
-  CheckCircle,
-  ExternalLink,
-  Key,
-  Globe,
-  User,
-  Lock,
-  AlertCircle,
-  Server,
-  ChevronDown,
-  ChevronUp,
-} from "lucide-react"
+import { useRouter } from "next/navigation"
+import { ArrowLeft, RefreshCw, CheckCircle, XCircle, Clock, FileText, AlertCircle, TrendingUp, TrendingDown, Minus } from "lucide-react"
 
-export default function AutotaskIntegrationPage() {
-  const [formData, setFormData] = useState<{ [key: string]: string }>({
-    "api-integration-code": "",
-    username: "",
-    secret: "",
-    zone: "",
-    host: "",
-    timezone: "",
-    "custom-zone-url": "",
-  })
-  const [viewMspId, setViewMspId] = useState("")
-  const [viewServiceName, setViewServiceName] = useState("")
-  const [loadingConfig, setLoadingConfig] = useState(false)
-  const [configData, setConfigData] = useState<any>(null)
-  const [configError, setConfigError] = useState<string>("")
-  const [isTestingConnection, setIsTestingConnection] = useState(false)
-  const [connectionStatus, setConnectionStatus] = useState<{
-    success: boolean
-    message: string
-  } | null>(null)
-  const [isSaving, setIsSaving] = useState(false)
-  const [saveStatus, setSaveStatus] = useState<{
-    success: boolean
-    message: string
-  } | null>(null)
-  const [showGuide, setShowGuide] = useState(true)
+interface ComparisonResult {
+  Status: string
+  "Sheet Unit": string
+  "Autotask Unit": string
+  Metadata: Array<{
+    Id: number
+    SheetCustomerName: string
+    SheetServiceName: string
+    AutotaskCustomerName: string
+    AutotaskContractName: string
+    AutotaskContractServiceName: string
+    SheetPlanName: string
+    SheetUnitColumnName: string
+  }>
+}
 
-  useEffect(() => {
-    const defaultMspId = "msp-6ad4f1f1-4274-41ff-ad84-9fed354a3fac"
-    setViewMspId(defaultMspId)
-    fetchAvailableServices(defaultMspId)
-  }, [])
-
-  const fetchAvailableServices = async (mspId: string) => {
-    setLoadingConfig(true)
-    try {
-      const response = await fetch(`/api/nocodb-services?msp_id=${mspId}`)
-      if (response.ok) {
-        const data = await response.json()
-        const serviceNames = data.services.map((s: any) => s.name).filter(Boolean)
-
-        // Auto-select first service if available
-        if (serviceNames.length > 0) {
-          const firstService = serviceNames[0]
-          setViewServiceName(firstService)
-          await fetchServiceConfig(firstService, mspId)
-        }
-      }
-    } catch (error) {
-      console.error("Failed to fetch services:", error)
-      setConfigError("Failed to load configuration. Please refresh the page.")
-    } finally {
-      setLoadingConfig(false)
+interface ReconciliationRun {
+  Id: number
+  Service: string
+  reconciliation_run_id: string
+  run_name: string
+  run_by: string
+  status: string
+  processed_at: string
+  processed_data: {
+    Service: string
+    processed_data: {
+      "Comparison Results": ComparisonResult
     }
-  }
+  } | null
+  not_mapped: any[]
+}
 
-  const fetchServiceConfig = async (serviceName: string, mspId?: string) => {
-    const mspIdToUse = mspId || viewMspId
+export default function ReconciliationResultsPage() {
+  const router = useRouter()
+  const [runs, setRuns] = useState<ReconciliationRun[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [selectedRun, setSelectedRun] = useState<ReconciliationRun | null>(null)
 
-    if (!serviceName || !mspIdToUse) {
-      return
-    }
-
-    setConfigError("")
-    setConfigData(null)
-
+  // Fetch reconciliation runs from Next.js API route
+  const fetchReconciliationRuns = async () => {
+    setLoading(true)
+    setError(null)
+    
     try {
-      const params = new URLSearchParams({
-        msp_id: mspIdToUse,
-        name: serviceName,
-      })
-
-      const response = await fetch(`/api/service-config?${params.toString()}`)
+      const response = await fetch('/api/reconciliation-runs')
 
       if (!response.ok) {
         const errorData = await response.json()
-        throw new Error(errorData.error || "Failed to fetch configuration")
+        throw new Error(errorData.error || 'Failed to fetch reconciliation runs')
       }
 
       const data = await response.json()
-      setConfigData(data)
-      setConfigError("")
-
-      // Auto-fill form with existing data
-      fillFormWithExistingData(data)
+      console.log('API Response:', data)
+      setRuns(data.list || [])
+      
+      // Auto-select first run if available
+      if (data.list && data.list.length > 0) {
+        setSelectedRun(data.list[0])
+      }
     } catch (err) {
-      setConfigError(err instanceof Error ? err.message : "Unknown error")
-      setConfigData(null)
+      console.error('Fetch error:', err)
+      setError(err instanceof Error ? err.message : 'An error occurred')
+    } finally {
+      setLoading(false)
     }
   }
 
-  const fillFormWithExistingData = (data?: any) => {
-    const configToUse = data || configData
-    if (!configToUse || !configToUse.configuration) return
+  useEffect(() => {
+    fetchReconciliationRuns()
+  }, [])
 
-    const config = configToUse.configuration
+  const handleBack = () => {
+    router.push('/billing-reconciliation/upload-file')
+  }
 
-    setFormData({
-      "api-integration-code": config.integration_code || "",
-      username: config.username || "",
-      secret: config.secret || "",
-      zone: config.zone_url || "",
-      host: config.host || "",
-      timezone: config.timezone || "",
-      "custom-zone-url": config.custom_zone_url || "",
+  const getStatusIcon = (status: string) => {
+    if (status === 'Over Bill') {
+      return <TrendingUp className="h-5 w-5 text-red-600" />
+    } else if (status === 'Under Bill') {
+      return <TrendingDown className="h-5 w-5 text-orange-600" />
+    } else if (status === 'Matched') {
+      return <CheckCircle className="h-5 w-5 text-green-600" />
+    }
+    return <Minus className="h-5 w-5 text-gray-600" />
+  }
+
+  const getStatusBadge = (status: string) => {
+    const statusStyles = {
+      'Over Bill': 'bg-red-100 text-red-800 dark:bg-red-900/20 dark:text-red-400',
+      'Under Bill': 'bg-orange-100 text-orange-800 dark:bg-orange-900/20 dark:text-orange-400',
+      'Matched': 'bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-400',
+      'No Mapping': 'bg-gray-100 text-gray-800 dark:bg-gray-900/20 dark:text-gray-400',
+    }
+    
+    return (
+      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${statusStyles[status as keyof typeof statusStyles] || statusStyles['No Mapping']}`}>
+        {status}
+      </span>
+    )
+  }
+
+  const getRunStatusBadge = (status: string) => {
+    const statusStyles = {
+      completed: 'bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-400',
+      failed: 'bg-red-100 text-red-800 dark:bg-red-900/20 dark:text-red-400',
+    }
+    
+    return (
+      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${statusStyles[status as keyof typeof statusStyles] || 'bg-gray-100 text-gray-800'}`}>
+        {status}
+      </span>
+    )
+  }
+
+  const formatDate = (dateString: string) => {
+    if (!dateString) return 'N/A'
+    const date = new Date(dateString)
+    return date.toLocaleString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
     })
   }
 
-  const handleInputChange = (id: string, value: string) => {
-    setFormData((prev) => ({
-      ...prev,
-      [id]: value,
-    }))
-  }
-
-  const requiredFields = ["api-integration-code", "username", "secret", "zone", "host", "timezone"]
-  const allRequiredFieldsFilled = requiredFields.every((field) => formData[field]?.trim())
-
-  const testConnection = async () => {
-    const missingFields = requiredFields.filter((field) => !formData[field])
-
-    if (missingFields.length > 0) {
-      setConnectionStatus({
-        success: false,
-        message: "Please fill in all required fields before testing the connection.",
-      })
-      return
-    }
-
-    setIsTestingConnection(true)
-    setConnectionStatus(null)
-    setSaveStatus(null)
-
-    try {
-      const endpoints = ["services", "contracts", "companies"]
-      const results = await Promise.all(
-        endpoints.map(async (api) => {
-          const params = new URLSearchParams({
-            api,
-            apiCode: formData["api-integration-code"],
-            username: formData["username"],
-            secret: formData["secret"],
-          })
-
-          try {
-            const response = await fetch(
-              `https://n8n-oitlabs.eastus.cloudapp.azure.com/webhook/autotaskapi?${params.toString()}`,
-              {
-                method: "GET",
-                headers: {
-                  "Content-Type": "application/json",
-                },
-              },
-            )
-
-            return {
-              api: api.charAt(0).toUpperCase() + api.slice(1),
-              success: response.ok,
-              status: response.status,
-              message: response.ok ? "Connected" : `Failed (${response.status})`,
-            }
-          } catch (err) {
-            return {
-              api: api.charAt(0).toUpperCase() + api.slice(1),
-              success: false,
-              status: 0,
-              message: "Connection error",
-            }
-          }
-        }),
-      )
-
-      const allSuccess = results.every((r) => r.success)
-      const successCount = results.filter((r) => r.success).length
-      const failedEndpoints = results.filter((r) => !r.success).map((r) => r.api)
-
-      if (allSuccess) {
-        setConnectionStatus({
-          success: true,
-          message: `Successfully connected to Autotask! All endpoints verified:\n✓ Services\n✓ Contracts\n✓ Companies`,
-        })
-      } else {
-        setConnectionStatus({
-          success: false,
-          message: `Partial connection: ${successCount}/${endpoints.length} endpoints accessible.\nFailed: ${failedEndpoints.join(", ")}.\nCheck your API user permissions in Autotask.`,
-        })
-      }
-    } catch (error) {
-      setConnectionStatus({
-        success: false,
-        message: `Connection error: ${error instanceof Error ? error.message : "Unknown error"}`,
-      })
-    } finally {
-      setIsTestingConnection(false)
+  const calculateDifference = (sheetUnit: string, autotaskUnit: string) => {
+    const sheet = parseInt(sheetUnit) || 0
+    const autotask = parseInt(autotaskUnit) || 0
+    const diff = sheet - autotask
+    return {
+      value: Math.abs(diff),
+      isPositive: diff > 0,
+      percentage: autotask > 0 ? ((diff / autotask) * 100).toFixed(1) : '0'
     }
   }
 
-  const saveConfiguration = async () => {
-    const missingFields = requiredFields.filter((field) => !formData[field])
-
-    if (missingFields.length > 0) {
-      setSaveStatus({
-        success: false,
-        message: "Please fill in all required fields before saving.",
-      })
-      return
-    }
-
-    if (!connectionStatus || !connectionStatus.success) {
-      setSaveStatus({
-        success: false,
-        message: "Please test the connection successfully before saving.",
-      })
-      return
-    }
-
-    if (!viewServiceName) {
-      setSaveStatus({
-        success: false,
-        message: "Service configuration error. Please refresh the page.",
-      })
-      return
-    }
-
-    setIsSaving(true)
-    setSaveStatus(null)
-
-    try {
-      const secretsToSave = [
-        { name: "autotask-api-integration-code", value: formData["api-integration-code"] },
-        { name: "autotask-username", value: formData["username"] },
-        { name: "autotask-secret", value: formData["secret"] },
-        { name: "autotask-zone", value: formData["zone"] },
-        { name: "autotask-host", value: formData["host"] },
-        { name: "autotask-timezone", value: formData["timezone"] },
-      ]
-
-      if (formData["custom-zone-url"]) {
-        secretsToSave.push({ name: "autotask-custom-zone-url", value: formData["custom-zone-url"] })
-      }
-
-      for (const secret of secretsToSave) {
-        const response = await fetch("/api/secrets", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify(secret),
-        })
-
-        if (!response.ok) {
-          throw new Error(`Failed to save ${secret.name}`)
-        }
-      }
-
-      // Send configuration data to webhook
-      const webhookPayload = {
-        msp_id: viewMspId,
-        service_name: viewServiceName,
-        integration_type: "autotask",
-        configuration: {
-          integration_code: formData["api-integration-code"],
-          username: formData["username"],
-          secret: formData["secret"],
-          zone_url: formData["zone"],
-          host: formData["host"],
-          timezone: formData["timezone"],
-          custom_zone_url: formData["custom-zone-url"] || null,
-        },
-        status: "active",
-      }
-
-      const webhookResponse = await fetch("/api/send-service-config", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(webhookPayload),
-      })
-
-      if (!webhookResponse.ok) {
-        throw new Error("Failed to send configuration data to webhook")
-      }
-
-      setSaveStatus({
-        success: true,
-        message: "Configuration saved successfully to Azure Key Vault and synced to database!",
-      })
-    } catch (error) {
-      setSaveStatus({
-        success: false,
-        message: `Failed to save configuration: ${error instanceof Error ? error.message : "Unknown error"}`,
-      })
-    } finally {
-      setIsSaving(false)
-    }
+  // Helper to get comparison results - handles nested structure
+  const getComparisonResults = (run: ReconciliationRun) => {
+    return run.processed_data?.processed_data?.["Comparison Results"]
   }
-
-  const requiredData = [
-    {
-      id: "api-integration-code",
-      label: "API Integration Code",
-      description: "Your Autotask API Integration Code (Tracking Identifier)",
-      icon: Key,
-      type: "text",
-      required: true,
-    },
-    {
-      id: "username",
-      label: "Username",
-      description: "Your Autotask API username (Generated Key)",
-      icon: User,
-      type: "text",
-      required: true,
-    },
-    {
-      id: "secret",
-      label: "Secret",
-      description: "Your Autotask API secret (Generated Password)",
-      icon: Lock,
-      type: "password",
-      required: true,
-    },
-    {
-      id: "host",
-      label: "API Host",
-      description: "The Autotask API host URL",
-      icon: Server,
-      type: "text",
-      required: true,
-    },
-    {
-      id: "zone",
-      label: "Zone",
-      description: "Select your Autotask zone",
-      icon: Globe,
-      type: "select",
-      required: true,
-      options: [
-        "Pre-release",
-        "Pre-release (UK)",
-        "Limited Release",
-        "Limited Release (UK)",
-        "America East",
-        "America East 2",
-        "America East 3",
-        "America West",
-        "America West 2",
-        "America West 3",
-        "America West 4",
-        "UK",
-        "UK2",
-        "UK3",
-        "Australia / New Zealand",
-        "Australia 2",
-        "Pre-Release (Deutsch)",
-        "Pre-Release (Español)",
-        "German (Deutsch)",
-        "EU1 (English Europe and Asia)",
-        "Spanish (Español)",
-        "Other (Custom URL)",
-      ],
-    },
-    {
-      id: "custom-zone-url",
-      label: "Custom Zone URL",
-      description: "Custom zone URL (only if 'Other (Custom URL)' is selected)",
-      icon: Globe,
-      type: "text",
-      required: false,
-    },
-    {
-      id: "timezone",
-      label: "Timezone",
-      description: "Select your timezone",
-      icon: Globe,
-      type: "select",
-      required: true,
-      options: [
-        "Africa/Abidjan",
-        "Africa/Accra",
-        "Africa/Addis_Ababa",
-        "Africa/Algiers",
-        "Africa/Asmara",
-        "Africa/Bamako",
-        "Africa/Bangui",
-        "Africa/Banjul",
-        "Africa/Bissau",
-        "Africa/Blantyre",
-        "Africa/Brazzaville",
-        "Africa/Bujumbura",
-        "Africa/Cairo",
-        "Africa/Casablanca",
-        "Africa/Ceuta",
-        "America/Adak",
-        "America/Anchorage",
-        "America/Anguilla",
-        "America/Antigua",
-        "America/Araguaina",
-        "America/Argentina/Buenos_Aires",
-        "America/Barbados",
-        "America/Belem",
-        "America/Belize",
-        "America/Chicago",
-        "America/Denver",
-        "America/Detroit",
-        "America/Edmonton",
-        "America/Halifax",
-        "America/Los_Angeles",
-        "America/Mexico_City",
-        "America/New_York",
-        "America/Phoenix",
-        "America/Toronto",
-        "America/Vancouver",
-        "Asia/Bangkok",
-        "Asia/Colombo",
-        "Asia/Dubai",
-        "Asia/Hong_Kong",
-        "Asia/Jakarta",
-        "Asia/Jerusalem",
-        "Asia/Karachi",
-        "Asia/Kolkata",
-        "Asia/Manila",
-        "Asia/Seoul",
-        "Asia/Shanghai",
-        "Asia/Singapore",
-        "Asia/Tokyo",
-        "Atlantic/Azores",
-        "Atlantic/Bermuda",
-        "Atlantic/Canary",
-        "Atlantic/Cape_Verde",
-        "Australia/Adelaide",
-        "Australia/Brisbane",
-        "Australia/Darwin",
-        "Australia/Hobart",
-        "Australia/Melbourne",
-        "Australia/Perth",
-        "Australia/Sydney",
-        "Europe/Amsterdam",
-        "Europe/Athens",
-        "Europe/Berlin",
-        "Europe/Brussels",
-        "Europe/Budapest",
-        "Europe/Copenhagen",
-        "Europe/Dublin",
-        "Europe/Helsinki",
-        "Europe/Istanbul",
-        "Europe/Lisbon",
-        "Europe/London",
-        "Europe/Madrid",
-        "Europe/Moscow",
-        "Europe/Oslo",
-        "Europe/Paris",
-        "Europe/Prague",
-        "Europe/Rome",
-        "Europe/Stockholm",
-        "Europe/Vienna",
-        "Europe/Warsaw",
-        "Europe/Zurich",
-        "Pacific/Auckland",
-        "Pacific/Fiji",
-        "Pacific/Guam",
-        "Pacific/Honolulu",
-        "Pacific/Pago_Pago",
-        "UTC",
-      ],
-    },
-  ]
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
-      <div className="px-8 py-12 max-w-5xl mx-auto">
+    <div className="min-h-screen bg-gray-50 dark:bg-slate-950">
+      <div className="px-8 py-12 max-w-7xl mx-auto">
         {/* Header */}
         <div className="mb-8">
-          <div className="flex items-center space-x-4 mb-4">
-            <div className="w-16 h-16 bg-white dark:bg-gray-800 rounded-xl flex items-center justify-center p-3 border border-gray-200 dark:border-gray-700">
-              <img
-                src="/logos/Autotask-Logo-Registered.jpg"
-                alt="Autotask logo"
-                className="max-w-full max-h-full object-contain"
-              />
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-4">
+              <button
+                onClick={handleBack}
+                className="w-10 h-10 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-lg flex items-center justify-center transition-colors"
+              >
+                <ArrowLeft className="h-5 w-5 text-gray-600 dark:text-gray-400" />
+              </button>
+              <div className="w-12 h-12 bg-purple-50 dark:bg-purple-900/20 rounded-xl flex items-center justify-center">
+                <FileText className="h-6 w-6 text-purple-600 dark:text-purple-400" />
+              </div>
+              <div>
+                <h1 className="text-3xl font-light text-gray-900 dark:text-white tracking-tight">
+                  Reconciliation Results
+                </h1>
+                <p className="text-sm text-gray-500 dark:text-gray-400 font-normal">
+                  View billing comparison and reconciliation status
+                </p>
+              </div>
             </div>
-            <div>
-              <h1 className="text-3xl font-light text-gray-900 dark:text-white tracking-tight">Autotask Integration</h1>
-              <p className="text-sm text-gray-500 dark:text-gray-400 font-normal">
-                Configure your Autotask API connection
-              </p>
-            </div>
+
+            <button
+              onClick={fetchReconciliationRuns}
+              disabled={loading}
+              className="inline-flex items-center px-4 py-2 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-purple-600 hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
+              Refresh
+            </button>
           </div>
         </div>
 
-        {/* Setup Guide */}
-        <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 p-8 mb-8">
-          <button
-            onClick={() => setShowGuide(!showGuide)}
-            className="w-full flex items-center justify-between text-left"
-          >
-            <h2 className="text-xl font-semibold text-gray-900 dark:text-white">Setup Guide</h2>
-            {showGuide ? (
-              <ChevronUp className="h-5 w-5 text-gray-500" />
-            ) : (
-              <ChevronDown className="h-5 w-5 text-gray-500" />
-            )}
-          </button>
-
-          {showGuide && (
-            <div className="mt-6 space-y-6">
-              <div className="space-y-4">
-                <div className="flex items-start space-x-3">
-                  <div className="flex-shrink-0 w-6 h-6 rounded-full bg-blue-100 dark:bg-blue-900 text-blue-600 dark:text-blue-300 flex items-center justify-center text-sm font-semibold">
-                    1
-                  </div>
-                  <div className="flex-1">
-                    <h3 className="font-semibold text-gray-900 dark:text-white mb-2">
-                      Log in to your Autotask account
-                    </h3>
-                    <p className="text-sm text-gray-600 dark:text-gray-300 mb-2">
-                      Navigate to{" "}
-                      <a
-                        href="https://autotask.com"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-blue-600 dark:text-blue-400 hover:underline"
-                      >
-                        autotask.com
-                      </a>{" "}
-                      and sign in with your credentials.
-                    </p>
-                  </div>
-                </div>
-
-                <div className="flex items-start space-x-3">
-                  <div className="flex-shrink-0 w-6 h-6 rounded-full bg-blue-100 dark:bg-blue-900 text-blue-600 dark:text-blue-300 flex items-center justify-center text-sm font-semibold">
-                    2
-                  </div>
-                  <div className="flex-1">
-                    <h3 className="font-semibold text-gray-900 dark:text-white mb-2">
-                      Navigate to API User Management
-                    </h3>
-                    <p className="text-sm text-gray-600 dark:text-gray-300">
-                      Go to <strong>Admin → Resources (Users) → API Users</strong> to create or manage API credentials.
-                    </p>
-                  </div>
-                </div>
-
-                <div className="flex items-start space-x-3">
-                  <div className="flex-shrink-0 w-6 h-6 rounded-full bg-blue-100 dark:bg-blue-900 text-blue-600 dark:text-blue-300 flex items-center justify-center text-sm font-semibold">
-                    3
-                  </div>
-                  <div className="flex-1">
-                    <h3 className="font-semibold text-gray-900 dark:text-white mb-2">Create a new API User</h3>
-                    <p className="text-sm text-gray-600 dark:text-gray-300 mb-2">
-                      Click <strong>New API User</strong> and configure the following:
-                    </p>
-                    <ul className="text-sm text-gray-600 dark:text-gray-300 list-disc list-inside space-y-1 ml-4">
-                      <li>Set appropriate permissions for the integration</li>
-                      <li>Generate API credentials (Username and Secret)</li>
-                      <li>Note down the Tracking Identifier (Integration Code)</li>
-                    </ul>
-                  </div>
-                </div>
-
-                <div className="flex items-start space-x-3">
-                  <div className="flex-shrink-0 w-6 h-6 rounded-full bg-blue-100 dark:bg-blue-900 text-blue-600 dark:text-blue-300 flex items-center justify-center text-sm font-semibold">
-                    4
-                  </div>
-                  <div className="flex-1">
-                    <h3 className="font-semibold text-gray-900 dark:text-white mb-2">Enter your credentials below</h3>
-                    <p className="text-sm text-gray-600 dark:text-gray-300">
-                      Fill in the configuration form with your API credentials, select your zone, and test the
-                      connection.
-                    </p>
-                  </div>
-                </div>
+        {/* Error State */}
+        {error && (
+          <div className="mb-6 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4">
+            <div className="flex items-center">
+              <AlertCircle className="h-5 w-5 text-red-600 dark:text-red-400 mr-3" />
+              <div>
+                <h3 className="text-sm font-medium text-red-800 dark:text-red-200">Error loading results</h3>
+                <p className="text-sm text-red-700 dark:text-red-300 mt-1">{error}</p>
               </div>
             </div>
-          )}
-        </div>
+          </div>
+        )}
 
         {/* Loading State */}
-        {loadingConfig && (
-          <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 p-8 mb-8">
-            <div className="flex items-center justify-center py-8">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-              <span className="ml-3 text-gray-600 dark:text-gray-300">Loading configuration...</span>
-            </div>
+        {loading && !error && (
+          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-gray-200 dark:border-slate-800 p-12 text-center">
+            <RefreshCw className="h-8 w-8 text-gray-400 animate-spin mx-auto mb-4" />
+            <p className="text-gray-600 dark:text-gray-400">Loading reconciliation runs...</p>
           </div>
         )}
 
-        {/* Error Message */}
-        {configError && !loadingConfig && (
-          <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-2xl p-6 mb-8">
-            <div className="flex items-start space-x-3">
-              <AlertCircle className="h-5 w-5 text-red-600 dark:text-red-400 flex-shrink-0 mt-0.5" />
-              <div>
-                <h3 className="font-semibold text-red-900 dark:text-red-100 mb-1">Error Loading Configuration</h3>
-                <p className="text-sm text-red-700 dark:text-red-300">{configError}</p>
+        {/* Results Grid */}
+        {!loading && !error && runs.length > 0 && (
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {/* List of Runs */}
+            <div className="lg:col-span-1 bg-white dark:bg-slate-900 rounded-2xl border border-gray-200 dark:border-slate-800 shadow-sm p-6">
+              <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
+                Recent Runs ({runs.length})
+              </h2>
+              
+              <div className="space-y-3 max-h-[600px] overflow-y-auto">
+                {runs.map((run) => {
+                  const comparisonResults = getComparisonResults(run)
+                  const comparisonStatus = comparisonResults?.Status || 'No Mapping'
+                  return (
+                    <button
+                      key={run.Id}
+                      onClick={() => setSelectedRun(run)}
+                      className={`w-full text-left p-4 rounded-lg border transition-colors ${
+                        selectedRun?.Id === run.Id
+                          ? 'bg-purple-50 dark:bg-purple-900/20 border-purple-300 dark:border-purple-700'
+                          : 'bg-gray-50 dark:bg-slate-800 border-gray-200 dark:border-slate-700 hover:bg-gray-100 dark:hover:bg-slate-700'
+                      }`}
+                    >
+                      <div className="flex items-start justify-between mb-2">
+                        <div className="flex items-center space-x-2">
+                          {getStatusIcon(comparisonStatus)}
+                          <span className="font-medium text-gray-900 dark:text-white text-sm">
+                            {run.Service || 'Unknown Service'}
+                          </span>
+                        </div>
+                        {getStatusBadge(comparisonStatus)}
+                      </div>
+                      <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">
+                        {run.run_name || 'N/A'}
+                      </p>
+                      <p className="text-xs text-gray-400 dark:text-gray-500">
+                        {formatDate(run.processed_at)}
+                      </p>
+                    </button>
+                  )
+                })}
               </div>
             </div>
-          </div>
-        )}
 
-        {/* Configuration Form */}
-        {!loadingConfig && (
-          <div
-            id="configuration-form"
-            className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 p-8 mb-8"
-          >
-            <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-6">Configuration</h2>
-
-            <div className="space-y-6">
-              {requiredData.map((item) => {
-                const Icon = item.icon
-                const isCustomZoneUrl = item.id === "custom-zone-url"
-                const showCustomZoneUrl = formData["zone"] === "Other (Custom URL)"
-
-                if (isCustomZoneUrl && !showCustomZoneUrl) {
-                  return null
-                }
-
-                return (
-                  <div key={item.id} className="space-y-2">
-                    <label className="flex items-center space-x-2 text-sm font-medium text-gray-900 dark:text-white">
-                      <Icon className="h-4 w-4 text-gray-500 dark:text-gray-400" />
-                      <span>{item.label}</span>
-                      {item.required && <span className="text-red-500">*</span>}
-                    </label>
-
-                    <p className="text-xs text-gray-500 dark:text-gray-400">{item.description}</p>
-
-                    {item.type === "select" ? (
-                      <select
-                        value={formData[item.id] || ""}
-                        onChange={(e) => handleInputChange(item.id, e.target.value)}
-                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      >
-                        <option value="">Select {item.label}</option>
-                        {item.options?.map((option) => (
-                          <option key={option} value={option}>
-                            {option}
-                          </option>
-                        ))}
-                      </select>
-                    ) : (
-                      <input
-                        type={item.type}
-                        value={formData[item.id] || ""}
-                        onChange={(e) => handleInputChange(item.id, e.target.value)}
-                        placeholder={`Enter ${item.label}`}
-                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      />
-                    )}
+            {/* Details Panel */}
+            <div className="lg:col-span-2 bg-white dark:bg-slate-900 rounded-2xl border border-gray-200 dark:border-slate-800 shadow-sm p-6">
+              {selectedRun ? (
+                <div>
+                  {/* Header */}
+                  <div className="flex items-center justify-between mb-6 pb-4 border-b border-gray-200 dark:border-slate-700">
+                    <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
+                      Billing Comparison
+                    </h2>
+                    {getRunStatusBadge(selectedRun.status)}
                   </div>
-                )
-              })}
-            </div>
 
-            {/* Test Connection Button */}
-            <div className="mt-8 pt-6 border-t border-gray-200 dark:border-gray-700">
-              <button
-                onClick={testConnection}
-                disabled={isTestingConnection || !allRequiredFieldsFilled}
-                className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-gray-300 dark:disabled:bg-gray-600 text-white font-medium py-3 px-4 rounded-lg transition-colors disabled:cursor-not-allowed flex items-center justify-center space-x-2"
-              >
-                {isTestingConnection ? (
-                  <>
-                    <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
-                    <span>Testing Connection...</span>
-                  </>
-                ) : (
-                  <>
-                    <ExternalLink className="h-5 w-5" />
-                    <span>Test Connection</span>
-                  </>
-                )}
-              </button>
+                  {(() => {
+                    const comparisonResults = getComparisonResults(selectedRun)
+                    return comparisonResults ? (
+                      <>
+                        {/* Comparison Summary Cards */}
+                        <div className="grid grid-cols-3 gap-4 mb-6">
+                          <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-4">
+                            <p className="text-sm text-blue-600 dark:text-blue-400 mb-1">CSV Units</p>
+                            <p className="text-2xl font-bold text-blue-900 dark:text-blue-100">
+                              {comparisonResults["Sheet Unit"]}
+                            </p>
+                          </div>
+                          <div className="bg-purple-50 dark:bg-purple-900/20 rounded-lg p-4">
+                            <p className="text-sm text-purple-600 dark:text-purple-400 mb-1">Autotask Units</p>
+                            <p className="text-2xl font-bold text-purple-900 dark:text-purple-100">
+                              {comparisonResults["Autotask Unit"]}
+                            </p>
+                          </div>
+                          <div className={`rounded-lg p-4 ${
+                            comparisonResults.Status === 'Over Bill'
+                              ? 'bg-red-50 dark:bg-red-900/20'
+                              : comparisonResults.Status === 'Under Bill'
+                              ? 'bg-orange-50 dark:bg-orange-900/20'
+                              : 'bg-green-50 dark:bg-green-900/20'
+                          }`}>
+                            <p className={`text-sm mb-1 ${
+                              comparisonResults.Status === 'Over Bill'
+                                ? 'text-red-600 dark:text-red-400'
+                                : comparisonResults.Status === 'Under Bill'
+                                ? 'text-orange-600 dark:text-orange-400'
+                                : 'text-green-600 dark:text-green-400'
+                            }`}>
+                              Status
+                            </p>
+                            <p className={`text-xl font-bold ${
+                              comparisonResults.Status === 'Over Bill'
+                                ? 'text-red-900 dark:text-red-100'
+                                : comparisonResults.Status === 'Under Bill'
+                                ? 'text-orange-900 dark:text-orange-100'
+                                : 'text-green-900 dark:text-green-100'
+                            }`}>
+                              {comparisonResults.Status}
+                            </p>
+                          </div>
+                        </div>
 
-              {!allRequiredFieldsFilled && (
-                <p className="text-xs text-gray-500 dark:text-gray-400 mt-2 text-center">
-                  Please fill in all required fields to test the connection
-                </p>
+                        {/* Difference Calculation */}
+                        {(() => {
+                          const diff = calculateDifference(
+                            comparisonResults["Sheet Unit"],
+                            comparisonResults["Autotask Unit"]
+                          )
+                          return diff.value > 0 ? (
+                            <div className={`p-4 rounded-lg mb-6 ${
+                              diff.isPositive 
+                                ? 'bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800'
+                                : 'bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800'
+                            }`}>
+                              <div className="flex items-center justify-between">
+                                <div>
+                                  <p className={`text-sm font-medium ${
+                                    diff.isPositive 
+                                      ? 'text-red-800 dark:text-red-200'
+                                      : 'text-orange-800 dark:text-orange-200'
+                                  }`}>
+                                    Difference Detected
+                                  </p>
+                                  <p className={`text-xs mt-1 ${
+                                    diff.isPositive 
+                                      ? 'text-red-600 dark:text-red-400'
+                                      : 'text-orange-600 dark:text-orange-400'
+                                  }`}>
+                                    {diff.isPositive ? 'CSV has fewer units than Autotask' : 'CSV has more units than Autotask'}
+                                  </p>
+                                </div>
+                                <div className="text-right">
+                                  <p className={`text-2xl font-bold ${
+                                    diff.isPositive 
+                                      ? 'text-red-900 dark:text-red-100'
+                                      : 'text-orange-900 dark:text-orange-100'
+                                  }`}>
+                                    {diff.value}
+                                  </p>
+                                  <p className={`text-xs ${
+                                    diff.isPositive 
+                                      ? 'text-red-600 dark:text-red-400'
+                                      : 'text-orange-600 dark:text-orange-400'
+                                  }`}>
+                                    ({diff.percentage}% difference)
+                                  </p>
+                                </div>
+                              </div>
+                            </div>
+                          ) : null
+                        })()}
+
+                        {/* Mapping Details */}
+                        {comparisonResults.Metadata && comparisonResults.Metadata.length > 0 && (
+                          <div className="mb-6">
+                            <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-3">
+                              Mapping Details
+                            </h3>
+                            <div className="bg-gray-50 dark:bg-slate-800 rounded-lg p-4 space-y-4">
+                              {comparisonResults.Metadata.map((meta, index) => (
+                                <div key={index} className="grid grid-cols-2 gap-4 text-sm pb-4 border-b border-gray-200 dark:border-slate-700 last:border-b-0 last:pb-0">
+                                  <div>
+                                    <p className="text-gray-500 dark:text-gray-400 text-xs">CSV Customer</p>
+                                    <p className="text-gray-900 dark:text-white font-medium">{meta.SheetCustomerName}</p>
+                                  </div>
+                                  <div>
+                                    <p className="text-gray-500 dark:text-gray-400 text-xs">Autotask Customer</p>
+                                    <p className="text-gray-900 dark:text-white font-medium">{meta.AutotaskCustomerName}</p>
+                                  </div>
+                                  <div>
+                                    <p className="text-gray-500 dark:text-gray-400 text-xs">CSV Plan</p>
+                                    <p className="text-gray-900 dark:text-white font-medium">{meta.SheetPlanName}</p>
+                                  </div>
+                                  <div>
+                                    <p className="text-gray-500 dark:text-gray-400 text-xs">Autotask Contract</p>
+                                    <p className="text-gray-900 dark:text-white font-medium">{meta.AutotaskContractName}</p>
+                                  </div>
+                                  <div className="col-span-2">
+                                    <p className="text-gray-500 dark:text-gray-400 text-xs">Autotask Service</p>
+                                    <p className="text-gray-900 dark:text-white font-medium">{meta.AutotaskContractServiceName}</p>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Run Metadata */}
+                        <div className="border-t border-gray-200 dark:border-slate-700 pt-4">
+                          <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-3">
+                            Run Information
+                          </h3>
+                          <div className="grid grid-cols-2 gap-4 text-sm">
+                            <div>
+                              <p className="text-gray-500 dark:text-gray-400">Service</p>
+                              <p className="text-gray-900 dark:text-white font-medium">{selectedRun.Service}</p>
+                            </div>
+                            <div>
+                              <p className="text-gray-500 dark:text-gray-400">Run By</p>
+                              <p className="text-gray-900 dark:text-white font-medium">{selectedRun.run_by || 'N/A'}</p>
+                            </div>
+                            <div>
+                              <p className="text-gray-500 dark:text-gray-400">Run Name</p>
+                              <p className="text-gray-900 dark:text-white font-medium">{selectedRun.run_name || 'N/A'}</p>
+                            </div>
+                            <div>
+                              <p className="text-gray-500 dark:text-gray-400">Processed At</p>
+                              <p className="text-gray-900 dark:text-white font-medium">{formatDate(selectedRun.processed_at)}</p>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Not Mapped Items */}
+                        {selectedRun.not_mapped && selectedRun.not_mapped.length > 0 && (
+                          <div className="mt-6 border-t border-gray-200 dark:border-slate-700 pt-4">
+                            <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-3">
+                              Unmapped Items ({selectedRun.not_mapped.length})
+                            </h3>
+                            <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-4">
+                              <p className="text-sm text-yellow-800 dark:text-yellow-200 mb-2">
+                                The following items from the CSV were not matched with Autotask:
+                              </p>
+                              <div className="max-h-48 overflow-y-auto space-y-1">
+                                {selectedRun.not_mapped.map((item, index) => (
+                                  <div key={index} className="text-xs text-yellow-700 dark:text-yellow-300 py-1">
+                                    {item.Customer || item.Domain} - {item["Plan Name"]} ({item["Used Licenses"]} units)
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                      </>
+                    ) : (
+                      <div className="text-center py-12">
+                        <AlertCircle className="h-16 w-16 text-gray-400 mx-auto mb-4" />
+                        <p className="text-gray-600 dark:text-gray-400 text-lg font-medium mb-2">
+                          No Comparison Data
+                        </p>
+                        <p className="text-gray-500 dark:text-gray-500 text-sm">
+                          This reconciliation run has no processed comparison results.
+                        </p>
+                        {selectedRun.not_mapped && selectedRun.not_mapped.length > 0 && (
+                          <p className="text-yellow-600 dark:text-yellow-400 text-sm mt-2">
+                            However, there are {selectedRun.not_mapped.length} unmapped items from the CSV.
+                          </p>
+                        )}
+                      </div>
+                    )
+                  })()}
+                </div>
+              ) : (
+                <div className="text-center py-12">
+                  <FileText className="h-16 w-16 text-gray-400 mx-auto mb-4" />
+                  <p className="text-gray-600 dark:text-gray-400">
+                    Select a reconciliation run to view billing comparison
+                  </p>
+                </div>
               )}
             </div>
+          </div>
+        )}
 
-            {/* Connection Status */}
-            {connectionStatus && (
-              <div
-                className={`mt-4 p-4 rounded-lg border ${
-                  connectionStatus.success
-                    ? "bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800"
-                    : "bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800"
-                }`}
-              >
-                <div className="flex items-start space-x-3">
-                  {connectionStatus.success ? (
-                    <CheckCircle className="h-5 w-5 text-green-600 dark:text-green-400 flex-shrink-0 mt-0.5" />
-                  ) : (
-                    <AlertCircle className="h-5 w-5 text-red-600 dark:text-red-400 flex-shrink-0 mt-0.5" />
-                  )}
-                  <div className="flex-1">
-                    <p
-                      className={`text-sm whitespace-pre-line ${
-                        connectionStatus.success
-                          ? "text-green-800 dark:text-green-200"
-                          : "text-red-800 dark:text-red-200"
-                      }`}
-                    >
-                      {connectionStatus.message}
-                    </p>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Save Configuration Button */}
-            {connectionStatus?.success && (
-              <div className="mt-4">
-                <button
-                  onClick={saveConfiguration}
-                  disabled={isSaving}
-                  className="w-full bg-green-600 hover:bg-green-700 disabled:bg-gray-300 dark:disabled:bg-gray-600 text-white font-medium py-3 px-4 rounded-lg transition-colors disabled:cursor-not-allowed flex items-center justify-center space-x-2"
-                >
-                  {isSaving ? (
-                    <>
-                      <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
-                      <span>Saving Configuration...</span>
-                    </>
-                  ) : (
-                    <>
-                      <CheckCircle className="h-5 w-5" />
-                      <span>Save Configuration</span>
-                    </>
-                  )}
-                </button>
-              </div>
-            )}
-
-            {/* Save Status */}
-            {saveStatus && (
-              <div
-                className={`mt-4 p-4 rounded-lg border ${
-                  saveStatus.success
-                    ? "bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800"
-                    : "bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800"
-                }`}
-              >
-                <div className="flex items-start space-x-3">
-                  {saveStatus.success ? (
-                    <CheckCircle className="h-5 w-5 text-green-600 dark:text-green-400 flex-shrink-0 mt-0.5" />
-                  ) : (
-                    <AlertCircle className="h-5 w-5 text-red-600 dark:text-red-400 flex-shrink-0 mt-0.5" />
-                  )}
-                  <div className="flex-1">
-                    <p
-                      className={`text-sm ${
-                        saveStatus.success ? "text-green-800 dark:text-green-200" : "text-red-800 dark:text-red-200"
-                      }`}
-                    >
-                      {saveStatus.message}
-                    </p>
-                  </div>
-                </div>
-              </div>
-            )}
+        {/* No Runs State */}
+        {!loading && !error && runs.length === 0 && (
+          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-gray-200 dark:border-slate-800 p-12 text-center">
+            <FileText className="h-16 w-16 text-gray-400 mx-auto mb-4" />
+            <p className="text-gray-600 dark:text-gray-400 text-lg font-medium mb-2">
+              No Reconciliation Runs Found
+            </p>
+            <p className="text-gray-500 dark:text-gray-500 text-sm">
+              Upload CSV files to create reconciliation runs
+            </p>
+            <button
+              onClick={() => router.push('/billing-reconciliation/upload-file')}
+              className="mt-4 inline-flex items-center px-4 py-2 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-purple-600 hover:bg-purple-700"
+            >
+              Upload CSV Files
+            </button>
           </div>
         )}
       </div>
