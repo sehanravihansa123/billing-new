@@ -533,15 +533,19 @@ export function useContractServices({ selectedContracts: propSelectedContracts }
           const mspDomain = "offshoreitlabs.com" // TODO: Get this from your MSP data or config
 
           const nocoDbData = {
+             query: {
+            action: "create table",
+             },
             msp_lookup_domain: mspDomain,
             service_lookup_name: "Autotask",
             integration_type: "Autotask",
+            msp_id: `msp-${crypto.randomUUID()}`,
 
             autotask_contract_service_name: serviceSelection.serviceName || "",
-
-            mapid: `${serviceSelection.contractId}-${serviceSelection.serviceId}-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+            mapid: `mapping-${crypto.randomUUID()}`,
+            service_id: `service-${crypto.randomUUID()}`, 
             service_name: billingConfig?.serviceName || "",
-            service_id: serviceSelection.serviceId || "",
+            autotask_service_id: serviceSelection.serviceId || "",
             contract_service_id: serviceData.id || serviceData.serviceID || "",
             contract_name: contractData.contractName || "",
             contract_id: contractData.contractId || "",
@@ -568,12 +572,12 @@ export function useContractServices({ selectedContracts: propSelectedContracts }
           console.log(`[v0] === SENDING SERVICE ${index + 1} TO NOCODB ===`)
           console.log(
             "[v0] Webhook URL:",
-            "https://n8n-oitlabs.eastus.cloudapp.azure.com/webhook/sendmappingdatalatest",
+            "https://n8n-oitlabs.eastus.cloudapp.azure.com/webhook/sendmappingdatalatest?action=create table&table=reconciliation_mappings",
           )
           console.log("[v0] Payload:", JSON.stringify(nocoDbData, null, 2))
 
           // Send to webhook
-          const response = await fetch("https://n8n-oitlabs.eastus.cloudapp.azure.com/webhook/sendmappingdatalatest", {
+          const response = await fetch("https://n8n-oitlabs.eastus.cloudapp.azure.com/webhook/sendmappingdatalatest?action=create table&table=reconciliation_mappings", {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
